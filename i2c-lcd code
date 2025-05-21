@@ -1,1 +1,179 @@
-I2C
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+LiquidCrystal_I2C lcd(0x27, 16, 4); // LCD 16x4 para exibir as informações conforme solicitado
+
+const int numJogadores = 4;
+
+int posicaoJogador[numJogadores] = {0, 0, 0, 0};
+int saldoJogador[numJogadores] = {1000, 1000, 1000, 1000}; // Saldo inicial
+bool preso[numJogadores] = {false, false, false, false};
+int turnosPreso[numJogadores] = {0, 0, 0, 0};
+int jogadorAtual = 0;
+
+String nomeCasa(int pos) {
+  switch (pos) {
+    case 0:  return "Inicio";
+    case 1:  return "Santo Amaro";
+    case 2:  return "Morro Conceicao";
+    case 3:  return "Encruzilhada";
+    case 4:  return "Sorte ou Reves";
+    case 5:  return "Iputinga";
+    case 6:  return "Va para Prisao";
+    case 7:  return "Mustardinha";
+    case 8:  return "Afogados";
+    case 9:  return "Caxanga";
+    case 10: return "Derby";
+    case 11: return "Casa Amarela";
+    case 12: return "Feriado";
+    case 13: return "Gracas";
+    case 14: return "Companhia Eletrica";
+    case 15: return "Jaqueira";
+    case 16: return "Casa Forte";
+    case 17: return "Sorte ou Reves";
+    case 18: return "Prisao";
+    case 19: return "Poco da Panela";
+    case 20: return "Pina";
+    case 21: return "Setubal";
+    case 22: return "Metro";
+    case 23: return "Boa Viagem";
+    default: return "Invalida";
+  }
+}
+
+void addDinheiro(int jogador, int valor) {
+  saldoJogador[jogador] += valor;
+  if (saldoJogador[jogador] < 0) saldoJogador[jogador] = 0;
+}
+
+void removeDinheiro(int jogador, int valor) {
+  addDinheiro(jogador, -valor);
+}
+
+String textoEvento = "";
+
+void eventoDaCasa(int jogador, int pos) {
+  String casa = nomeCasa(pos);
+  textoEvento = "J" + String(jogador + 1) + " em " + casa;
+
+  switch (pos) {
+    case 0:  addDinheiro(jogador, 200); textoEvento += " +R$200"; break;
+    case 1:  removeDinheiro(jogador, 50); textoEvento += " -R$50"; break;
+    case 2:  posicaoJogador[jogador] = 10; textoEvento += " Avanca a Derby"; break;
+    case 3:  addDinheiro(jogador, 100); textoEvento += " +R$100"; break;
+    case 4:  removeDinheiro(jogador, 20); textoEvento += " -R$20"; break;
+    case 5:  addDinheiro(jogador, 150); textoEvento += " +R$150"; break;
+    case 6:  preso[jogador] = true; turnosPreso[jogador] = 3; textoEvento += " Prisao 3 t"; break;
+    case 7:  posicaoJogador[jogador] += 3; if (posicaoJogador[jogador] > 23) posicaoJogador[jogador] -= 24; textoEvento += " Avanca 3"; break;
+    case 8:  posicaoJogador[jogador] -= 2; if (posicaoJogador[jogador] < 0) posicaoJogador[jogador] += 24; textoEvento += " Volta 2"; break;
+    case 9:  removeDinheiro(jogador, 30); textoEvento += " -R$30"; break;
+    case 10: textoEvento += " Livre"; break;
+    case 11: addDinheiro(jogador, 50); textoEvento += " +R$50"; break;
+    case 12: posicaoJogador[jogador] = 0; textoEvento += " Volta inicio"; break;
+    case 13: removeDinheiro(jogador, 100); textoEvento += " -R$100"; break;
+    case 14: addDinheiro(jogador, 200); textoEvento += " +R$200"; break;
+    case 15: removeDinheiro(jogador, 150); textoEvento += " -R$150"; break;
+    case 16: posicaoJogador[jogador] = 5; textoEvento += " Avanca Iputinga"; break;
+    case 17: posicaoJogador[jogador] = 3; textoEvento += " Volta Encruzilhada"; break;
+    case 18: removeDinheiro(jogador, 40); preso[jogador] = true; turnosPreso[jogador] = 3; textoEvento += " Prisao 3 t -R$40"; break;
+    case 19: addDinheiro(jogador, 120); textoEvento += " +R$120"; break;
+    case 20: removeDinheiro(jogador, 80); textoEvento += " -R$80"; break;
+    case 21: addDinheiro(jogador, 70); textoEvento += " +R$70"; break;
+    case 22: removeDinheiro(jogador, 60); textoEvento += " -R$60"; break;
+    case 23: addDinheiro(jogador, 90); textoEvento += " +R$90"; break;
+    default: textoEvento = "Posicao invalida!"; break;
+  }
+}
+
+void setup() {
+  lcd.init();
+  lcd.backlight();
+  randomSeed(analogRead(0));
+
+  lcd.setCursor(0, 0);
+  lcd.print("Jogo Iniciado!");
+  delay(2000);
+  lcd.clear();
+}
+
+void loop() {
+  lcd.clear();
+
+  if (preso[jogadorAtual]) {
+    lcd.setCursor(0, 0);
+    lcd.print("J");
+    lcd.print(jogadorAtual + 1);
+    lcd.print(" preso t:");
+    lcd.print(turnosPreso[jogadorAtual]);
+
+    lcd.setCursor(0, 1);
+    lcd.print("Saldo:");
+    lcd.print(saldoJogador[jogadorAtual]);
+
+    lcd.setCursor(0, 2);
+    lcd.print("Aguarde turno");
+
+    delay(3000);
+
+    turnosPreso[jogadorAtual]--;
+    if (turnosPreso[jogadorAtual] <= 0) {
+      preso[jogadorAtual] = false;
+    }
+    jogadorAtual = (jogadorAtual + 1) % numJogadores;
+    return;
+  }
+
+  int dado = random(1, 7);
+  int posAnterior = posicaoJogador[jogadorAtual];
+  posicaoJogador[jogadorAtual] += dado;
+  if (posicaoJogador[jogadorAtual] > 23)
+    posicaoJogador[jogadorAtual] -= 24;
+
+  eventoDaCasa(jogadorAtual, posicaoJogador[jogadorAtual]);
+
+  // Exibir na tela conforme formato solicitado
+  // LCD tem 16x2, para atender melhor, será utilizado LCD 16x4 (alterado no início)
+
+  // Linha 0: jx    Dado:*número do dado
+  lcd.setCursor(0, 0);
+  lcd.print("J");
+  lcd.print(jogadorAtual + 1);
+  lcd.print("    Dado:");
+  lcd.print(dado);
+
+  // Linha 1: *nome da casa (até 16 caracteres)
+  lcd.setCursor(0, 1);
+  String casa = nomeCasa(posicaoJogador[jogadorAtual]);
+  if (casa.length() > 16) {
+    casa = casa.substring(0, 16);
+  }
+  
+  lcd.print(casa);
+
+  // Linha 2: j1=dinheiro do j1  j2= dinheiro do j2 (cada "jX=valor" terá até 7 chars para caber)
+  lcd.setCursor(0, 2);
+  lcd.print("J1=");
+  lcd.print(saldoJogador[0]);
+  if (saldoJogador[0] < 10) lcd.print(" ");
+  else if (saldoJogador[0] < 100) lcd.print(" ");
+  lcd.print(" J2=");
+  lcd.print(saldoJogador[1]);
+  if (saldoJogador[1] < 10) lcd.print(" ");
+  else if (saldoJogador[1] < 100) lcd.print(" ");
+
+  // Linha 3: j3=dinheiro do j3  j4=dinheiro do j4
+  lcd.setCursor(0, 3);
+  lcd.print("J3=");
+  lcd.print(saldoJogador[2]);
+  if (saldoJogador[2] < 10) lcd.print(" ");
+  else if (saldoJogador[2] < 100) lcd.print(" ");
+  lcd.print(" J4=");
+  lcd.print(saldoJogador[3]);
+  if (saldoJogador[3] < 10) lcd.print(" ");
+  else if (saldoJogador[3] < 100) lcd.print(" ");
+
+  delay(5000);
+
+  jogadorAtual = (jogadorAtual + 1) % numJogadores;
+}
+
