@@ -1,7 +1,7 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 
-LiquidCrystal_I2C lcd(0x27, 16, 4); // LCD 16x4 para exibir as informações conforme solicitado
+LiquidCrystal_I2C lcd(0x27, 20, 4); // LCD 20x4 para exibir as informações com 20 caracteres por linha e 4 linhas
 
 const int numJogadores = 4;
 
@@ -50,18 +50,173 @@ void removeDinheiro(int jogador, int valor) {
   addDinheiro(jogador, -valor);
 }
 
+// Evento especial sorteado
 String textoEvento = "";
+String textoEventoLinha2 = "";
+String textoEventoLinha3 = "";
+
+void eventoEspecial(int jogador) {
+  const int numEventos = 20;
+  int sorteio = random(0, numEventos);
+
+  // Limpar mensagens anteriores
+  textoEvento = "";
+  textoEventoLinha2 = "";
+  textoEventoLinha3 = "";
+
+  switch (sorteio) {
+    case 0:
+      removeDinheiro(jogador, 200);
+      textoEvento = "Rev\xe9s:";
+      textoEventoLinha2 = "-200 R$";
+      break;
+    case 1:
+      removeDinheiro(jogador, 150);
+      textoEvento = "Rev\xe9s:";
+      textoEventoLinha2 = "-150 R$";
+      break;
+    case 2: {
+      int totalReceber = 0;
+      for (int i = 0; i < numJogadores; i++) {
+        if (i != jogador) {
+          removeDinheiro(i, 120);
+          totalReceber += 120;
+        }
+      }
+      addDinheiro(jogador, totalReceber);
+      textoEvento = "Sorte:";
+      textoEventoLinha2 = "Todos te pagam";
+      textoEventoLinha3 = "120 R$ cada";
+      break;
+    }
+    case 3: {
+      int totalReceber = 0;
+      for (int i = 0; i < numJogadores; i++) {
+        if (i != jogador) {
+          removeDinheiro(i, 80);
+          totalReceber += 80;
+        }
+      }
+      addDinheiro(jogador, totalReceber);
+      textoEvento = "Sorte:";
+      textoEventoLinha2 = "Todos te pagam";
+      textoEventoLinha3 = "80 R$ cada";
+      break;
+    }
+    case 4:
+      addDinheiro(jogador, 650);
+      textoEvento = "Sorte:";
+      textoEventoLinha2 = "Recebe +650 R$";
+      break;
+    case 5:
+      removeDinheiro(jogador, 200);
+      textoEvento = "Rev\xe9s:";
+      textoEventoLinha2 = "-200 R$";
+      break;
+    case 6:
+      preso[jogador] = true;
+      turnosPreso[jogador] = 3;
+      textoEvento = "Rev\xe9s:";
+      textoEventoLinha2 = "Va para prisao";
+      textoEventoLinha3 = "3 turnos preso";
+      break;
+    case 7:
+      removeDinheiro(jogador, 550);
+      textoEvento = "Rev\xe9s:";
+      textoEventoLinha2 = "-550 R$";
+      break;
+    case 8:
+      addDinheiro(jogador, 1000);
+      textoEvento = "Sorte:";
+      textoEventoLinha2 = "Voce ganha +";
+      textoEventoLinha3 = "1000 R$";
+      break;
+    case 9:
+      addDinheiro(jogador, 500);
+      textoEvento = "Sorte:";
+      textoEventoLinha2 = "Voce ganha +";
+      textoEventoLinha3 = "500 R$";
+      break;
+    case 10:
+      removeDinheiro(jogador, 200);
+      textoEvento = "Rev\xe9s:";
+      textoEventoLinha2 = "-200 R$";
+      break;
+    case 11:
+      removeDinheiro(jogador, 150);
+      textoEvento = "Rev\xe9s:";
+      textoEventoLinha2 = "-150 R$";
+      break;
+    case 12: {
+      int totalReceber = 0;
+      for (int i = 0; i < numJogadores; i++) {
+        if (i != jogador) {
+          removeDinheiro(i, 100);
+          totalReceber += 100;
+        }
+      }
+      addDinheiro(jogador, totalReceber);
+      textoEvento = "Sorte:";
+      textoEventoLinha2 = "Todos te pagam";
+      textoEventoLinha3 = "100 R$ cada";
+      break;
+    }
+    case 13:
+      removeDinheiro(jogador, 80);
+      textoEvento = "Rev\xe9s:";
+      textoEventoLinha2 = "-80 R$";
+      break;
+    case 14:
+      removeDinheiro(jogador, 600);
+      textoEvento = "Rev\xe9s:";
+      textoEventoLinha2 = "-600 R$";
+      break;
+    case 15:
+      posicaoJogador[jogador] += 3;
+      if (posicaoJogador[jogador] > 23) posicaoJogador[jogador] -= 24;
+      textoEvento = "Sorte:";
+      textoEventoLinha2 = "Ande 3 casas";
+      break;
+    case 16:
+      addDinheiro(jogador, 100);
+      textoEvento = "Sorte:";
+      textoEventoLinha2 = "+100 R$";
+      break;
+    case 17:
+      posicaoJogador[jogador] += 5;
+      if (posicaoJogador[jogador] > 23) posicaoJogador[jogador] -= 24;
+      textoEvento = "Sorte:";
+      textoEventoLinha2 = "Ande 5 casas";
+      break;
+    case 18:
+      removeDinheiro(jogador, 120);
+      textoEvento = "Rev\xe9s:";
+      textoEventoLinha2 = "-120 R$";
+      break;
+    case 19:
+      posicaoJogador[jogador] += 5;
+      if (posicaoJogador[jogador] > 23) posicaoJogador[jogador] -= 24;
+      textoEvento = "Sorte:";
+      textoEventoLinha2 = "Ande 5 casas";
+      break;
+  }
+}
 
 void eventoDaCasa(int jogador, int pos) {
   String casa = nomeCasa(pos);
   textoEvento = "J" + String(jogador + 1) + " em " + casa;
+  textoEventoLinha2 = "";
+  textoEventoLinha3 = "";
 
   switch (pos) {
     case 0:  addDinheiro(jogador, 200); textoEvento += " +R$200"; break;
     case 1:  removeDinheiro(jogador, 50); textoEvento += " -R$50"; break;
     case 2:  posicaoJogador[jogador] = 10; textoEvento += " Avanca a Derby"; break;
     case 3:  addDinheiro(jogador, 100); textoEvento += " +R$100"; break;
-    case 4:  removeDinheiro(jogador, 20); textoEvento += " -R$20"; break;
+    case 4:
+    case 17:
+      eventoEspecial(jogador);
+      break;
     case 5:  addDinheiro(jogador, 150); textoEvento += " +R$150"; break;
     case 6:  preso[jogador] = true; turnosPreso[jogador] = 3; textoEvento += " Prisao 3 t"; break;
     case 7:  posicaoJogador[jogador] += 3; if (posicaoJogador[jogador] > 23) posicaoJogador[jogador] -= 24; textoEvento += " Avanca 3"; break;
@@ -74,7 +229,6 @@ void eventoDaCasa(int jogador, int pos) {
     case 14: addDinheiro(jogador, 200); textoEvento += " +R$200"; break;
     case 15: removeDinheiro(jogador, 150); textoEvento += " -R$150"; break;
     case 16: posicaoJogador[jogador] = 5; textoEvento += " Avanca Iputinga"; break;
-    case 17: posicaoJogador[jogador] = 3; textoEvento += " Volta Encruzilhada"; break;
     case 18: removeDinheiro(jogador, 40); preso[jogador] = true; turnosPreso[jogador] = 3; textoEvento += " Prisao 3 t -R$40"; break;
     case 19: addDinheiro(jogador, 120); textoEvento += " +R$120"; break;
     case 20: removeDinheiro(jogador, 80); textoEvento += " -R$80"; break;
@@ -83,6 +237,17 @@ void eventoDaCasa(int jogador, int pos) {
     case 23: addDinheiro(jogador, 90); textoEvento += " +R$90"; break;
     default: textoEvento = "Posicao invalida!"; break;
   }
+}
+
+void mostrarEventoEspecial() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(textoEvento);
+  lcd.setCursor(0, 1);
+  lcd.print(textoEventoLinha2);
+  lcd.setCursor(0, 2);
+  lcd.print(textoEventoLinha3);
+  delay(4000);
 }
 
 void setup() {
@@ -131,26 +296,23 @@ void loop() {
 
   eventoDaCasa(jogadorAtual, posicaoJogador[jogadorAtual]);
 
-  // Exibir na tela conforme formato solicitado
-  // LCD tem 16x2, para atender melhor, será utilizado LCD 16x4 (alterado no início)
+  // Mostrar evento especial se casa for 4 ou 17
+  if (posicaoJogador[jogadorAtual] == 4 || posicaoJogador[jogadorAtual] == 17) {
+    mostrarEventoEspecial();
+  }
 
-  // Linha 0: jx    Dado:*número do dado
   lcd.setCursor(0, 0);
   lcd.print("J");
   lcd.print(jogadorAtual + 1);
-  lcd.print("    Dado:");
+  lcd.print("    Dado:*");
   lcd.print(dado);
 
-  // Linha 1: *nome da casa (até 16 caracteres)
   lcd.setCursor(0, 1);
   String casa = nomeCasa(posicaoJogador[jogadorAtual]);
-  if (casa.length() > 16) {
-    casa = casa.substring(0, 16);
-  }
-  
+  if (casa.length() > 16) casa = casa.substring(0, 16);
+  lcd.print("*");
   lcd.print(casa);
 
-  // Linha 2: j1=dinheiro do j1  j2= dinheiro do j2 (cada "jX=valor" terá até 7 chars para caber)
   lcd.setCursor(0, 2);
   lcd.print("J1=");
   lcd.print(saldoJogador[0]);
@@ -161,7 +323,6 @@ void loop() {
   if (saldoJogador[1] < 10) lcd.print(" ");
   else if (saldoJogador[1] < 100) lcd.print(" ");
 
-  // Linha 3: j3=dinheiro do j3  j4=dinheiro do j4
   lcd.setCursor(0, 3);
   lcd.print("J3=");
   lcd.print(saldoJogador[2]);
@@ -176,4 +337,3 @@ void loop() {
 
   jogadorAtual = (jogadorAtual + 1) % numJogadores;
 }
-
