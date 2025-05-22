@@ -304,13 +304,13 @@ void loop() {
   lcd.setCursor(0, 0);
   lcd.print("J");
   lcd.print(jogadorAtual + 1);
-  lcd.print("    Dado:*");
+  lcd.print("    Dado:");
   lcd.print(dado);
 
   lcd.setCursor(0, 1);
   String casa = nomeCasa(posicaoJogador[jogadorAtual]);
   if (casa.length() > 16) casa = casa.substring(0, 16);
-  lcd.print("*");
+  lcd.print("");
   lcd.print(casa);
 
   lcd.setCursor(0, 2);
