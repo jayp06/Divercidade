@@ -4,13 +4,16 @@
 LiquidCrystal_I2C lcd(0x27, 20, 4); // LCD 20x4 para exibir as informações com 20 caracteres por linha e 4 linhas
 
 const int numJogadores = 4;
+const int numCasas = 24;
 
 int posicaoJogador[numJogadores] = {0, 0, 0, 0};
 int saldoJogador[numJogadores] = {1000, 1000, 1000, 1000}; // Saldo inicial
 bool preso[numJogadores] = {false, false, false, false};
 int turnosPreso[numJogadores] = {0, 0, 0, 0};
 int jogadorAtual = 0;
+bool ativo[numJogadores] = {true, true, true, true}; // jogadores ativos no jogo
 
+// Dados das casas
 String nomeCasa(int pos) {
   switch (pos) {
     case 0:  return "Inicio";
@@ -41,13 +44,116 @@ String nomeCasa(int pos) {
   }
 }
 
+// Preço para as casas (0 e 4, 6, 12, 17, 18 são especiais e não compráveis)
+int precoCasa[numCasas] = {
+  0,    // 0 Inicio - não comprável
+  100,  // 1 Santo Amaro
+  120,  // 2 Morro Conceicao
+  140,  // 3 Encruzilhada
+  0,    // 4 Sorte ou Reves - especial
+  150,  // 5 Iputinga
+  0,    // 6 Va para Prisao - especial
+  160,  // 7 Mustardinha
+  180,  // 8 Afogados
+  200,  // 9 Caxanga
+  220,  // 10 Derby
+  240,  // 11 Casa Amarela
+  0,    // 12 Feriado - especial
+  260,  // 13 Gracas
+  280,  // 14 Companhia Eletrica
+  300,  // 15 Jaqueira
+  320,  // 16 Casa Forte
+  0,    // 17 Sorte ou Reves - especial
+  0,    // 18 Prisao - especial
+  340,  // 19 Poco da Panela
+  360,  // 20 Pina
+  380,  // 21 Setubal
+  400,  // 22 Metro
+  420   // 23 Boa Viagem
+};
+
+// Para cada casa, qual jogador é dono (-1 significa sem dono)
+int donoCasa[numCasas];
+
 void addDinheiro(int jogador, int valor) {
   saldoJogador[jogador] += valor;
   if (saldoJogador[jogador] < 0) saldoJogador[jogador] = 0;
 }
 
 void removeDinheiro(int jogador, int valor) {
-  addDinheiro(jogador, -valor);
+  saldoJogador[jogador] -= valor;
+  if (saldoJogador[jogador] < 0) saldoJogador[jogador] = 0;
+}
+
+void verificarStatusJogador(int jogador) {
+  // Se saldo abaixo de zero, jogador sai
+  if (ativo[jogador] && saldoJogador[jogador] <= 0) {
+    ativo[jogador] = false;
+    // Resetar propriedades
+    for (int i = 0; i < numCasas; i++) {
+      if (donoCasa[i] == jogador) {
+        donoCasa[i] = -1;
+      }
+    }
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("J");
+    lcd.print(jogador + 1);
+    lcd.print(" eliminado!");
+    Serial.print("Jogador ");
+    Serial.print(jogador + 1);
+    Serial.println(" foi eliminado por saldo negativo.");
+    delay(4000);
+  }
+}
+
+bool verificarVencedor() {
+  // Verifica se jogador tem 3000 ou mais para ganhar
+  for (int i = 0; i < numJogadores; i++) {
+    if (ativo[i] && saldoJogador[i] >= 3000) {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("J");
+      lcd.print(i + 1);
+      lcd.print(" venceu!!!");
+      Serial.print("Jogador ");
+      Serial.print(i + 1);
+      Serial.println(" venceu com saldo >= 3000.");
+      delay(6000);
+      return true;
+    }
+  }
+  // Verifica se só tem um jogador ativo
+  int countAtivos = 0;
+  int ultimoAtivo = -1;
+  for (int i = 0; i < numJogadores; i++) {
+    if (ativo[i]) {
+      countAtivos++;
+      ultimoAtivo = i;
+    }
+  }
+  if (countAtivos == 1) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("J");
+    lcd.print(ultimoAtivo + 1);
+    lcd.print(" venceu!!!");
+    Serial.print("Jogador ");
+    Serial.print(ultimoAtivo + 1);
+    Serial.println(" venceu por ser o ultimo ativo.");
+    delay(6000);
+    return true;
+  }
+  return false;
+}
+
+void limparPropriedadeJogador(int jogador) {
+  for (int i = 0; i < numCasas; i++) {
+    if (donoCasa[i] == jogador) {
+      donoCasa[i] = -1;
+    }
+  }
 }
 
 // Evento especial sorteado
@@ -78,7 +184,7 @@ void eventoEspecial(int jogador) {
     case 2: {
       int totalReceber = 0;
       for (int i = 0; i < numJogadores; i++) {
-        if (i != jogador) {
+        if (i != jogador && ativo[i]) {
           removeDinheiro(i, 120);
           totalReceber += 120;
         }
@@ -92,7 +198,7 @@ void eventoEspecial(int jogador) {
     case 3: {
       int totalReceber = 0;
       for (int i = 0; i < numJogadores; i++) {
-        if (i != jogador) {
+        if (i != jogador && ativo[i]) {
           removeDinheiro(i, 80);
           totalReceber += 80;
         }
@@ -150,7 +256,7 @@ void eventoEspecial(int jogador) {
     case 12: {
       int totalReceber = 0;
       for (int i = 0; i < numJogadores; i++) {
-        if (i != jogador) {
+        if (i != jogador && ativo[i]) {
           removeDinheiro(i, 100);
           totalReceber += 100;
         }
@@ -202,43 +308,6 @@ void eventoEspecial(int jogador) {
   }
 }
 
-void eventoDaCasa(int jogador, int pos) {
-  String casa = nomeCasa(pos);
-  textoEvento = "J" + String(jogador + 1) + " em " + casa;
-  textoEventoLinha2 = "";
-  textoEventoLinha3 = "";
-
-  switch (pos) {
-    case 0:  addDinheiro(jogador, 200); textoEvento += " +R$200"; break;
-    case 1:  removeDinheiro(jogador, 50); textoEvento += " -R$50"; break;
-    case 2:  posicaoJogador[jogador] = 10; textoEvento += " Avanca a Derby"; break;
-    case 3:  addDinheiro(jogador, 100); textoEvento += " +R$100"; break;
-    case 4:
-    case 17:
-      eventoEspecial(jogador);
-      break;
-    case 5:  addDinheiro(jogador, 150); textoEvento += " +R$150"; break;
-    case 6:  preso[jogador] = true; turnosPreso[jogador] = 3; textoEvento += " Prisao 3 t"; break;
-    case 7:  posicaoJogador[jogador] += 3; if (posicaoJogador[jogador] > 23) posicaoJogador[jogador] -= 24; textoEvento += " Avanca 3"; break;
-    case 8:  posicaoJogador[jogador] -= 2; if (posicaoJogador[jogador] < 0) posicaoJogador[jogador] += 24; textoEvento += " Volta 2"; break;
-    case 9:  removeDinheiro(jogador, 30); textoEvento += " -R$30"; break;
-    case 10: textoEvento += " Livre"; break;
-    case 11: addDinheiro(jogador, 50); textoEvento += " +R$50"; break;
-    case 12: posicaoJogador[jogador] = 0; textoEvento += " Volta inicio"; break;
-    case 13: removeDinheiro(jogador, 100); textoEvento += " -R$100"; break;
-    case 14: addDinheiro(jogador, 200); textoEvento += " +R$200"; break;
-    case 15: removeDinheiro(jogador, 150); textoEvento += " -R$150"; break;
-    case 16: posicaoJogador[jogador] = 5; textoEvento += " Avanca Iputinga"; break;
-    case 18: removeDinheiro(jogador, 40); preso[jogador] = true; turnosPreso[jogador] = 3; textoEvento += " Prisao 3 t -R$40"; break;
-    case 19: addDinheiro(jogador, 120); textoEvento += " +R$120"; break;
-    case 20: removeDinheiro(jogador, 80); textoEvento += " -R$80"; break;
-    case 21: addDinheiro(jogador, 70); textoEvento += " +R$70"; break;
-    case 22: removeDinheiro(jogador, 60); textoEvento += " -R$60"; break;
-    case 23: addDinheiro(jogador, 90); textoEvento += " +R$90"; break;
-    default: textoEvento = "Posicao invalida!"; break;
-  }
-}
-
 void mostrarEventoEspecial() {
   lcd.clear();
   lcd.setCursor(0, 0);
@@ -250,18 +319,145 @@ void mostrarEventoEspecial() {
   delay(4000);
 }
 
+// Função para perguntar via Serial se o jogador quer comprar a casa
+bool perguntarCompra(int jogador, int casa) {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("J");
+  lcd.print(jogador + 1);
+  lcd.print(" casa:");
+  lcd.setCursor(0, 1);
+  String nome = nomeCasa(casa);
+  if (nome.length() > 16) nome = nome.substring(0, 16);
+  lcd.print(nome);
+  lcd.setCursor(0, 2);
+  lcd.print("Preco: R$");
+  lcd.print(precoCasa[casa]);
+  lcd.setCursor(0, 3);
+  lcd.print("Comprar? (s/n)");
+
+  Serial.println("Jogador " + String(jogador+1) + " caiu em " + nomeCasa(casa) + ", preço R$" + String(precoCasa[casa]) + ".");
+  Serial.println("Deseja comprar esta casa? (s/n)");
+
+  while (true) {
+    if (Serial.available() > 0) {
+      char resposta = Serial.read();
+      if (resposta == 's' || resposta == 'S') {
+        if (saldoJogador[jogador] >= precoCasa[casa]) {
+          removeDinheiro(jogador, precoCasa[casa]);
+          donoCasa[casa] = jogador;
+          lcd.clear();
+          lcd.setCursor(0,0);
+          lcd.print("Casa comprada!");
+          delay(2000);
+          return true;
+        } else {
+          lcd.clear();
+          lcd.setCursor(0,0);
+          lcd.print("Saldo insufic");
+          lcd.setCursor(0,1);
+          lcd.print("Compra cancelada");
+          delay(2000);
+          return false;
+        }
+      } else if (resposta == 'n' || resposta == 'N') {
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print("Compra negada");
+        delay(2000);
+        return false;
+      }
+    }
+  }
+}
+
+void eventoDaCasa(int jogador, int pos) {
+  String casa = nomeCasa(pos);
+  textoEvento = "J" + String(jogador + 1) + " em " + casa;
+  textoEventoLinha2 = "";
+  textoEventoLinha3 = "";
+
+  // Se casa é comprável e tem dono, cobrar aluguel
+  if (precoCasa[pos] > 0) { // casa comprável
+    if (donoCasa[pos] == -1) {
+      // Casa sem dono - perguntar compra
+      perguntarCompra(jogador, pos);
+    } else if (donoCasa[pos] != jogador) {
+      // Casa com dono - pagar aluguel 20% do preco
+      int aluguel = precoCasa[pos] / 5; // 20%
+      removeDinheiro(jogador, aluguel);
+      addDinheiro(donoCasa[pos], aluguel);
+
+      textoEvento = "J" + String(jogador + 1) + " paga";
+      textoEventoLinha2 = "aluguel R$" + String(aluguel);
+      textoEventoLinha3 = "para J" + String(donoCasa[pos] + 1);
+    }
+  }
+
+  // Eventos tradicionais conforme casa
+  switch (pos) {
+    case 0:  addDinheiro(jogador, 200); textoEvento += " +R$200"; break;
+    case 4:
+    case 17:
+      eventoEspecial(jogador);
+      break;
+    case 6:  preso[jogador] = true; turnosPreso[jogador] = 3; textoEvento += " Prisao 3 t"; break;
+    case 18: removeDinheiro(jogador, 40); preso[jogador] = true; turnosPreso[jogador] = 3; textoEvento += " Prisao 3 t -R$40"; break;
+    // Outras casas que movimentam jogador para posições específicas ou afetam saldo:
+    case 2:  posicaoJogador[jogador] = 10; textoEvento += " Avanca a Derby"; break;
+    case 7:  posicaoJogador[jogador] += 3; if (posicaoJogador[jogador] > 23) posicaoJogador[jogador] -= 24; textoEvento += " Avanca 3"; break;
+    case 8:  posicaoJogador[jogador] -= 2; if (posicaoJogador[jogador] < 0) posicaoJogador[jogador] += 24; textoEvento += " Volta 2"; break;
+    case 12: posicaoJogador[jogador] = 0; textoEvento += " Volta inicio"; break;
+    case 16: posicaoJogador[jogador] = 5; textoEvento += " Avanca Iputinga"; break;
+    case 1:  removeDinheiro(jogador, 50); textoEvento += " -R$50"; break;
+    case 3:  addDinheiro(jogador, 100); textoEvento += " +R$100"; break;
+    case 5:  addDinheiro(jogador, 150); textoEvento += " +R$150"; break;
+    case 9:  removeDinheiro(jogador, 30); textoEvento += " -R$30"; break;
+    case 10: textoEvento += " Livre"; break;
+    case 11: addDinheiro(jogador, 50); textoEvento += " +R$50"; break;
+    case 13: removeDinheiro(jogador, 100); textoEvento += " -R$100"; break;
+    case 14: addDinheiro(jogador, 200); textoEvento += " +R$200"; break;
+    case 15: removeDinheiro(jogador, 150); textoEvento += " -R$150"; break;
+    case 19: addDinheiro(jogador, 120); textoEvento += " +R$120"; break;
+    case 20: removeDinheiro(jogador, 80); textoEvento += " -R$80"; break;
+    case 21: addDinheiro(jogador, 70); textoEvento += " +R$70"; break;
+    case 22: removeDinheiro(jogador, 60); textoEvento += " -R$60"; break;
+    case 23: addDinheiro(jogador, 90); textoEvento += " +R$90"; break;
+    default: if (precoCasa[pos] == 0) textoEvento = "Posicao invalida!"; break;
+  }
+}
+
 void setup() {
+  Serial.begin(9600);
   lcd.init();
   lcd.backlight();
   randomSeed(analogRead(0));
+
+  for (int i = 0; i < numCasas; i++) {
+    donoCasa[i] = -1; // Nenhum dono inicialmente
+  }
 
   lcd.setCursor(0, 0);
   lcd.print("Jogo Iniciado!");
   delay(2000);
   lcd.clear();
+
+  Serial.println("Jogo Iniciado!");
+  Serial.println("Aperte s para comprar ou n para passar quando solicitado.");
 }
 
 void loop() {
+  // Verifica se só restou um jogador ativo ou algum chegou a 3000
+  if (verificarVencedor()) {
+    while(true) delay(1000); // Para o jogo após vitória
+  }
+
+  // Pula jogadores eliminados
+  if (!ativo[jogadorAtual]) {
+    jogadorAtual = (jogadorAtual + 1) % numJogadores;
+    return;
+  }
+
   lcd.clear();
 
   if (preso[jogadorAtual]) {
@@ -289,12 +485,14 @@ void loop() {
   }
 
   int dado = random(1, 7);
-  int posAnterior = posicaoJogador[jogadorAtual];
   posicaoJogador[jogadorAtual] += dado;
   if (posicaoJogador[jogadorAtual] > 23)
     posicaoJogador[jogadorAtual] -= 24;
 
   eventoDaCasa(jogadorAtual, posicaoJogador[jogadorAtual]);
+
+  // Após ação da casa, verifica saldo do jogador e elimina se necessário
+  verificarStatusJogador(jogadorAtual);
 
   // Mostrar evento especial se casa for 4 ou 17
   if (posicaoJogador[jogadorAtual] == 4 || posicaoJogador[jogadorAtual] == 17) {
@@ -337,3 +535,4 @@ void loop() {
 
   jogadorAtual = (jogadorAtual + 1) % numJogadores;
 }
+
