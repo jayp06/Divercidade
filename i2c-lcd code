@@ -13,6 +13,9 @@ int turnosPreso[numJogadores] = {0, 0, 0, 0};
 int jogadorAtual = 0;
 bool ativo[numJogadores] = {true, true, true, true}; // jogadores ativos no jogo
 
+// Número de casas construídas na propriedade (0 a 3) e 4 significa mansão
+int numeroCasasConstruidas[numCasas];
+
 // Dados das casas
 String nomeCasa(int pos) {
   switch (pos) {
@@ -93,6 +96,7 @@ void verificarStatusJogador(int jogador) {
     for (int i = 0; i < numCasas; i++) {
       if (donoCasa[i] == jogador) {
         donoCasa[i] = -1;
+        numeroCasasConstruidas[i] = 0;
       }
     }
 
@@ -152,6 +156,7 @@ void limparPropriedadeJogador(int jogador) {
   for (int i = 0; i < numCasas; i++) {
     if (donoCasa[i] == jogador) {
       donoCasa[i] = -1;
+      numeroCasasConstruidas[i] = 0;
     }
   }
 }
@@ -346,6 +351,7 @@ bool perguntarCompra(int jogador, int casa) {
         if (saldoJogador[jogador] >= precoCasa[casa]) {
           removeDinheiro(jogador, precoCasa[casa]);
           donoCasa[casa] = jogador;
+          numeroCasasConstruidas[casa] = 0; // sem construções inicialmente
           lcd.clear();
           lcd.setCursor(0,0);
           lcd.print("Casa comprada!");
@@ -371,6 +377,73 @@ bool perguntarCompra(int jogador, int casa) {
   }
 }
 
+// Função para perguntar se o dono quer construir casas ou mansão
+void tentarConstruir(int jogador, int casa) {
+  if (donoCasa[casa] != jogador) return; // Só dono pode construir
+  if (numeroCasasConstruidas[casa] >= 4) return; // Já tem mansão, não pode construir mais
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("J");
+  lcd.print(jogador + 1);
+  lcd.print(" Casa?");
+  lcd.setCursor(0, 1);
+  lcd.print("Preco 40 R$");
+  lcd.setCursor(0, 2);
+  if (numeroCasasConstruidas[casa] < 3)
+    lcd.print("Casinha ");
+  else
+    lcd.print("Mansao   ");
+  lcd.setCursor(0, 3);
+  lcd.print("Comprar? (s/n)");
+
+  Serial.println("Jogador " + String(jogador+1) + " passou pela casa " + nomeCasa(casa) + ".");
+  if (numeroCasasConstruidas[casa] < 3)
+    Serial.println("Deseja comprar casinha por 40 R$? (s/n)");
+  else
+    Serial.println("Deseja comprar mansao por 40 R$? (s/n)");
+
+  unsigned long tempoInicial = millis();
+  while ((millis() - tempoInicial) < 15000) { // tempo maximo 15 seg para responder
+    if (Serial.available() > 0) {
+      char resposta = Serial.read();
+      if (resposta == 's' || resposta == 'S') {
+        if (saldoJogador[jogador] >= 40) {
+          removeDinheiro(jogador, 40);
+          numeroCasasConstruidas[casa]++;
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("Construido:");
+          lcd.setCursor(0, 1);
+          if (numeroCasasConstruidas[casa] < 4)
+            lcd.print("Casinha ");
+          else
+            lcd.print("Mansao  ");
+          delay(2000);
+          return;
+        } else {
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("Saldo insufic");
+          delay(2000);
+          return;
+        }
+      } else if (resposta == 'n' || resposta == 'N') {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Nao construido");
+        delay(2000);
+        return;
+      }
+    }
+  }
+  // Tempo expirou
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Sem resposta");
+  delay(2000);
+}
+
 void eventoDaCasa(int jogador, int pos) {
   String casa = nomeCasa(pos);
   textoEvento = "J" + String(jogador + 1) + " em " + casa;
@@ -383,14 +456,20 @@ void eventoDaCasa(int jogador, int pos) {
       // Casa sem dono - perguntar compra
       perguntarCompra(jogador, pos);
     } else if (donoCasa[pos] != jogador) {
-      // Casa com dono - pagar aluguel 20% do preco
-      int aluguel = precoCasa[pos] / 5; // 20%
+      // Casa com dono - pagar aluguel 20% do preco + adicional por casas/mansão
+      int aluguelBase = precoCasa[pos] * 0.2;
+      int casas = numeroCasasConstruidas[pos];
+      int aluguel = aluguelBase + (casas * 4); // +4 por casa construída
+
       removeDinheiro(jogador, aluguel);
       addDinheiro(donoCasa[pos], aluguel);
 
       textoEvento = "J" + String(jogador + 1) + " paga";
       textoEventoLinha2 = "aluguel R$" + String(aluguel);
       textoEventoLinha3 = "para J" + String(donoCasa[pos] + 1);
+    } else {
+      // Jogador dono, tenta construir casas/mansão
+      tentarConstruir(jogador, pos);
     }
   }
 
@@ -435,6 +514,7 @@ void setup() {
 
   for (int i = 0; i < numCasas; i++) {
     donoCasa[i] = -1; // Nenhum dono inicialmente
+    numeroCasasConstruidas[i] = 0;
   }
 
   lcd.setCursor(0, 0);
@@ -535,4 +615,3 @@ void loop() {
 
   jogadorAtual = (jogadorAtual + 1) % numJogadores;
 }
-
