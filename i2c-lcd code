@@ -1,22 +1,133 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
+// Se for usar round() para o aluguel, descomente a linha abaixo:
+// #include <math.h>
 
-LiquidCrystal_I2C lcd(0x27, 20, 4); // LCD 20x4 para exibir as informações com 20 caracteres por linha e 4 linhas
+LiquidCrystal_I2C lcd(0x27, 20, 4); // LCD 20x4
 
-const int numJogadores = 4;
 const int numCasas = 24;
-
-int posicaoJogador[numJogadores] = {0, 0, 0, 0};
-int saldoJogador[numJogadores] = {1000, 1000, 1000, 1000}; // Saldo inicial
-bool preso[numJogadores] = {false, false, false, false};
-int turnosPreso[numJogadores] = {0, 0, 0, 0};
+int numJogadores = 0;
+int posicaoJogador[4] = {0, 0, 0, 0};
+int saldoJogador[4] = {1000, 1000, 1000, 1000};
+bool preso[4] = {false, false, false, false};
+int turnosPreso[4] = {0, 0, 0, 0};
 int jogadorAtual = 0;
-bool ativo[numJogadores] = {true, true, true, true}; // jogadores ativos no jogo
+bool ativo[4] = {false, false, false, false};
 
-// Número de casas construídas na propriedade (0 a 3) e 4 significa mansão
 int numeroCasasConstruidas[numCasas];
+int donoCasa[numCasas];
 
-// Dados das casas
+const int BOTAO_AVANCAR_NAO_COMPRAR = 7;
+const int BOTAO_COMPRAR_SIM = 8;
+
+void configurarJogadores();
+String nomeCasa(int pos);
+void eventoEspecial(int jogador);
+void mostrarEventoEspecial();
+bool perguntarCompra(int jogador, int casa);
+void tentarConstruir(int jogador, int casa);
+void eventoDaCasa(int jogador, int posNova);
+void verificarStatusJogador(int jogador);
+bool verificarVencedor();
+void esperarBotaoAvancar();
+
+int precoCasa[numCasas] = {
+  0, 100, 120, 140, 0, 150, 0, 160, 180, 200, 220, 240,
+  0, 260, 280, 300, 320, 0, 0, 340, 360, 380, 400, 420
+};
+
+String textoEvento = "";
+String textoEventoLinha2 = "";
+String textoEventoLinha3 = "";
+
+// --- FUNÇÃO DE ESPERA MODIFICADA (COM DEPURAÇÃO) ---
+void esperarBotaoAvancar() {
+  Serial.println("DEBUG: Entrou em esperarBotaoAvancar().");
+  unsigned long startDebounce = 0;
+  bool currentButtonState = digitalRead(BOTAO_AVANCAR_NAO_COMPRAR);
+  bool lastButtonState = currentButtonState; 
+  unsigned long lastDebugPrintTime = millis();
+
+  Serial.print("DEBUG: Estado inicial do botao (P7): ");
+  Serial.println(currentButtonState == HIGH ? "HIGH (solto)" : "LOW (pressionado)");
+
+  while (true) {
+    currentButtonState = digitalRead(BOTAO_AVANCAR_NAO_COMPRAR);
+
+    if (currentButtonState != lastButtonState) { 
+      Serial.print("DEBUG: Mudanca de estado! Anterior: ");
+      Serial.print(lastButtonState == HIGH ? "HIGH" : "LOW");
+      Serial.print(", Atual: ");
+      Serial.println(currentButtonState == HIGH ? "HIGH" : "LOW");
+
+      if (lastButtonState == HIGH && currentButtonState == LOW) { 
+        startDebounce = millis();
+        Serial.println("DEBUG: Botao Pressionado (H->L). Debounce timer iniciado.");
+      }
+      
+      if (lastButtonState == LOW && currentButtonState == HIGH) { 
+        unsigned long tempoDecorrido = millis() - startDebounce;
+        Serial.print("DEBUG: Botao Solto (L->H). Tempo desde debounce: ");
+        Serial.print(tempoDecorrido);
+        Serial.println("ms");
+        if ( tempoDecorrido > 50) { 
+          Serial.println("DEBUG: Debounce OK. Saindo de esperarBotaoAvancar().");
+          return; 
+        } else {
+          Serial.println("DEBUG: Debounce FALHOU (muito rapido). Continuando a esperar.");
+        }
+      }
+    }
+    lastButtonState = currentButtonState; 
+
+    if (millis() - lastDebugPrintTime > 1000) { 
+        Serial.print("DEBUG: ...esperando... Estado atual do botao (P7): ");
+        Serial.println(digitalRead(BOTAO_AVANCAR_NAO_COMPRAR) == HIGH ? "HIGH (solto)" : "LOW (pressionado)");
+        lastDebugPrintTime = millis();
+    }
+    delay(10); 
+  }
+}
+// --- FIM DA FUNÇÃO DE ESPERA (COM DEPURAÇÃO) ---
+
+void configurarJogadores() {
+  Serial.println("Quantos jogadores (1 a 4)?");
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Jogadores (1-4)?");
+  while (true) {
+    if (Serial.available() > 0) {
+      int jogadoresInput = Serial.parseInt(); 
+      if (jogadoresInput >= 1 && jogadoresInput <= 4) {
+        numJogadores = jogadoresInput;
+        for (int i = 0; i < numJogadores; i++) {
+          ativo[i] = true;
+          posicaoJogador[i] = 0; 
+          saldoJogador[i] = 1000; 
+          preso[i] = false;
+          turnosPreso[i] = 0;
+        }
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Jogadores:");
+        lcd.setCursor(0, 1);
+        lcd.print(numJogadores);
+        esperarBotaoAvancar(); 
+        break;
+      } else {
+        Serial.println("Por favor, insira um numero valido (1 a 4).");
+        lcd.setCursor(0,1);
+        lcd.print("Entrada invalida!");
+        delay(1000);
+        lcd.setCursor(0,0);
+        lcd.print("Jogadores (1-4)?  ");
+        lcd.setCursor(0,1);
+        lcd.print("                ");
+      }
+    }
+  }
+}
+
 String nomeCasa(int pos) {
   switch (pos) {
     case 0:  return "Inicio";
@@ -25,7 +136,7 @@ String nomeCasa(int pos) {
     case 3:  return "Encruzilhada";
     case 4:  return "Sorte ou Reves";
     case 5:  return "Iputinga";
-    case 6:  return "Va para Prisao";
+    case 6:  return "Va para Jaula"; 
     case 7:  return "Mustardinha";
     case 8:  return "Afogados";
     case 9:  return "Caxanga";
@@ -37,7 +148,7 @@ String nomeCasa(int pos) {
     case 15: return "Jaqueira";
     case 16: return "Casa Forte";
     case 17: return "Sorte ou Reves";
-    case 18: return "Prisao";
+    case 18: return "Jaula"; 
     case 19: return "Poco da Panela";
     case 20: return "Pina";
     case 21: return "Setubal";
@@ -47,88 +158,54 @@ String nomeCasa(int pos) {
   }
 }
 
-// Preço para as casas (0 e 4, 6, 12, 17, 18 são especiais e não compráveis)
-int precoCasa[numCasas] = {
-  0,    // 0 Inicio - não comprável
-  100,  // 1 Santo Amaro
-  120,  // 2 Morro Conceicao
-  140,  // 3 Encruzilhada
-  0,    // 4 Sorte ou Reves - especial
-  150,  // 5 Iputinga
-  0,    // 6 Va para Prisao - especial
-  160,  // 7 Mustardinha
-  180,  // 8 Afogados
-  200,  // 9 Caxanga
-  220,  // 10 Derby
-  240,  // 11 Casa Amarela
-  0,    // 12 Feriado - especial
-  260,  // 13 Gracas
-  280,  // 14 Companhia Eletrica
-  300,  // 15 Jaqueira
-  320,  // 16 Casa Forte
-  0,    // 17 Sorte ou Reves - especial
-  0,    // 18 Prisao - especial
-  340,  // 19 Poco da Panela
-  360,  // 20 Pina
-  380,  // 21 Setubal
-  400,  // 22 Metro
-  420   // 23 Boa Viagem
-};
-
-// Para cada casa, qual jogador é dono (-1 significa sem dono)
-int donoCasa[numCasas];
-
 void addDinheiro(int jogador, int valor) {
   saldoJogador[jogador] += valor;
-  if (saldoJogador[jogador] < 0) saldoJogador[jogador] = 0;
 }
 
 void removeDinheiro(int jogador, int valor) {
   saldoJogador[jogador] -= valor;
-  if (saldoJogador[jogador] < 0) saldoJogador[jogador] = 0;
 }
 
 void verificarStatusJogador(int jogador) {
-  // Se saldo abaixo de zero, jogador sai
-  if (ativo[jogador] && saldoJogador[jogador] <= 0) {
+  if (ativo[jogador] && saldoJogador[jogador] < 0) { 
     ativo[jogador] = false;
-    // Resetar propriedades
     for (int i = 0; i < numCasas; i++) {
       if (donoCasa[i] == jogador) {
         donoCasa[i] = -1;
         numeroCasasConstruidas[i] = 0;
       }
     }
-
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("J");
     lcd.print(jogador + 1);
-    lcd.print(" eliminado!");
+    lcd.print(" ELIMINADO!");
+    lcd.setCursor(0, 1);
+    lcd.print("Saldo Negativo.");
     Serial.print("Jogador ");
     Serial.print(jogador + 1);
     Serial.println(" foi eliminado por saldo negativo.");
-    delay(4000);
+    esperarBotaoAvancar();
   }
 }
 
 bool verificarVencedor() {
-  // Verifica se jogador tem 3000 ou mais para ganhar
   for (int i = 0; i < numJogadores; i++) {
     if (ativo[i] && saldoJogador[i] >= 3000) {
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("J");
-      lcd.print(i + 1);
-      lcd.print(" venceu!!!");
-      Serial.print("Jogador ");
-      Serial.print(i + 1);
-      Serial.println(" venceu com saldo >= 3000.");
-      delay(6000);
-      return true;
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("JOGADOR ");
+        lcd.print(i + 1);
+        lcd.print(" VENCEU");
+        lcd.setCursor(0, 1);
+        lcd.print("Riqueza >= 3000!");
+        Serial.print("Jogador ");
+        Serial.print(i + 1);
+        Serial.println(" venceu com saldo >= 3000.");
+        esperarBotaoAvancar();
+        return true;
     }
   }
-  // Verifica se só tem um jogador ativo
   int countAtivos = 0;
   int ultimoAtivo = -1;
   for (int i = 0; i < numJogadores; i++) {
@@ -137,179 +214,58 @@ bool verificarVencedor() {
       ultimoAtivo = i;
     }
   }
-  if (countAtivos == 1) {
+  if (numJogadores > 0 && countAtivos == 1 && ativo[ultimoAtivo]) {
     lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print("J");
+    lcd.print("JOGADOR ");
     lcd.print(ultimoAtivo + 1);
-    lcd.print(" venceu!!!");
+    lcd.print(" VENCEU");
+    lcd.setCursor(0, 1);
+    lcd.print("Ultimo de pe!");
     Serial.print("Jogador ");
     Serial.print(ultimoAtivo + 1);
     Serial.println(" venceu por ser o ultimo ativo.");
-    delay(6000);
+    esperarBotaoAvancar();
     return true;
   }
   return false;
 }
 
-void limparPropriedadeJogador(int jogador) {
-  for (int i = 0; i < numCasas; i++) {
-    if (donoCasa[i] == jogador) {
-      donoCasa[i] = -1;
-      numeroCasasConstruidas[i] = 0;
-    }
-  }
-}
-
-// Evento especial sorteado
-String textoEvento = "";
-String textoEventoLinha2 = "";
-String textoEventoLinha3 = "";
-
 void eventoEspecial(int jogador) {
   const int numEventos = 20;
-  int sorteio = random(0, numEventos);
-
-  // Limpar mensagens anteriores
+  int sorteio = random(0, numEventos); 
   textoEvento = "";
   textoEventoLinha2 = "";
   textoEventoLinha3 = "";
 
   switch (sorteio) {
-    case 0:
-      removeDinheiro(jogador, 200);
-      textoEvento = "Rev\xe9s:";
-      textoEventoLinha2 = "-200 R$";
-      break;
-    case 1:
-      removeDinheiro(jogador, 150);
-      textoEvento = "Rev\xe9s:";
-      textoEventoLinha2 = "-150 R$";
-      break;
-    case 2: {
-      int totalReceber = 0;
-      for (int i = 0; i < numJogadores; i++) {
-        if (i != jogador && ativo[i]) {
-          removeDinheiro(i, 120);
-          totalReceber += 120;
-        }
-      }
-      addDinheiro(jogador, totalReceber);
-      textoEvento = "Sorte:";
-      textoEventoLinha2 = "Todos te pagam";
-      textoEventoLinha3 = "120 R$ cada";
-      break;
-    }
-    case 3: {
-      int totalReceber = 0;
-      for (int i = 0; i < numJogadores; i++) {
-        if (i != jogador && ativo[i]) {
-          removeDinheiro(i, 80);
-          totalReceber += 80;
-        }
-      }
-      addDinheiro(jogador, totalReceber);
-      textoEvento = "Sorte:";
-      textoEventoLinha2 = "Todos te pagam";
-      textoEventoLinha3 = "80 R$ cada";
-      break;
-    }
-    case 4:
-      addDinheiro(jogador, 650);
-      textoEvento = "Sorte:";
-      textoEventoLinha2 = "Recebe +650 R$";
-      break;
-    case 5:
-      removeDinheiro(jogador, 200);
-      textoEvento = "Rev\xe9s:";
-      textoEventoLinha2 = "-200 R$";
-      break;
+    case 0: removeDinheiro(jogador, 200); textoEvento = "Reves:"; textoEventoLinha2 = "-200 R$"; break;
+    case 1: removeDinheiro(jogador, 150); textoEvento = "Reves:"; textoEventoLinha2 = "-150 R$"; break;
+    case 2: { int totalReceber = 0; for (int i = 0; i < numJogadores; i++) { if (i != jogador && ativo[i]) { removeDinheiro(i, 120); verificarStatusJogador(i); totalReceber += 120; } } addDinheiro(jogador, totalReceber); textoEvento = "Sorte:"; textoEventoLinha2 = "Outros te pagam"; textoEventoLinha3 = "120 R$ cada"; break; }
+    case 3: { int totalReceber = 0; for (int i = 0; i < numJogadores; i++) { if (i != jogador && ativo[i]) { removeDinheiro(i, 80); verificarStatusJogador(i); totalReceber += 80; } } addDinheiro(jogador, totalReceber); textoEvento = "Sorte:"; textoEventoLinha2 = "Outros te pagam"; textoEventoLinha3 = "80 R$ cada"; break; }
+    case 4: addDinheiro(jogador, 650); textoEvento = "Sorte:"; textoEventoLinha2 = "Recebe +650 R$"; break;
+    case 5: removeDinheiro(jogador, 200); textoEvento = "Reves:"; textoEventoLinha2 = "-200 R$"; break;
     case 6:
       preso[jogador] = true;
       turnosPreso[jogador] = 3;
-      textoEvento = "Rev\xe9s:";
-      textoEventoLinha2 = "Va para prisao";
-      textoEventoLinha3 = "3 turnos preso";
+      posicaoJogador[jogador] = 18; 
+      textoEvento = "Reves:";
+      textoEventoLinha2 = "Va para Jaula!"; 
+      textoEventoLinha3 = "(Pos.18) 3 turnos";
       break;
-    case 7:
-      removeDinheiro(jogador, 550);
-      textoEvento = "Rev\xe9s:";
-      textoEventoLinha2 = "-550 R$";
-      break;
-    case 8:
-      addDinheiro(jogador, 1000);
-      textoEvento = "Sorte:";
-      textoEventoLinha2 = "Voce ganha +";
-      textoEventoLinha3 = "1000 R$";
-      break;
-    case 9:
-      addDinheiro(jogador, 500);
-      textoEvento = "Sorte:";
-      textoEventoLinha2 = "Voce ganha +";
-      textoEventoLinha3 = "500 R$";
-      break;
-    case 10:
-      removeDinheiro(jogador, 200);
-      textoEvento = "Rev\xe9s:";
-      textoEventoLinha2 = "-200 R$";
-      break;
-    case 11:
-      removeDinheiro(jogador, 150);
-      textoEvento = "Rev\xe9s:";
-      textoEventoLinha2 = "-150 R$";
-      break;
-    case 12: {
-      int totalReceber = 0;
-      for (int i = 0; i < numJogadores; i++) {
-        if (i != jogador && ativo[i]) {
-          removeDinheiro(i, 100);
-          totalReceber += 100;
-        }
-      }
-      addDinheiro(jogador, totalReceber);
-      textoEvento = "Sorte:";
-      textoEventoLinha2 = "Todos te pagam";
-      textoEventoLinha3 = "100 R$ cada";
-      break;
-    }
-    case 13:
-      removeDinheiro(jogador, 80);
-      textoEvento = "Rev\xe9s:";
-      textoEventoLinha2 = "-80 R$";
-      break;
-    case 14:
-      removeDinheiro(jogador, 600);
-      textoEvento = "Rev\xe9s:";
-      textoEventoLinha2 = "-600 R$";
-      break;
-    case 15:
-      posicaoJogador[jogador] += 3;
-      if (posicaoJogador[jogador] > 23) posicaoJogador[jogador] -= 24;
-      textoEvento = "Sorte:";
-      textoEventoLinha2 = "Ande 3 casas";
-      break;
-    case 16:
-      addDinheiro(jogador, 100);
-      textoEvento = "Sorte:";
-      textoEventoLinha2 = "+100 R$";
-      break;
-    case 17:
-      posicaoJogador[jogador] += 5;
-      if (posicaoJogador[jogador] > 23) posicaoJogador[jogador] -= 24;
-      textoEvento = "Sorte:";
-      textoEventoLinha2 = "Ande 5 casas";
-      break;
-    case 18:
-      removeDinheiro(jogador, 120);
-      textoEvento = "Rev\xe9s:";
-      textoEventoLinha2 = "-120 R$";
-      break;
-    case 19:
-      posicaoJogador[jogador] += 5;
-      if (posicaoJogador[jogador] > 23) posicaoJogador[jogador] -= 24;
-      textoEvento = "Sorte:";
-      textoEventoLinha2 = "Ande 5 casas";
-      break;
+    case 7: removeDinheiro(jogador, 550); textoEvento = "Reves:"; textoEventoLinha2 = "-550 R$"; break;
+    case 8: addDinheiro(jogador, 1000); textoEvento = "Sorte:"; textoEventoLinha2 = "Ganha +1000 R$"; break;
+    case 9: addDinheiro(jogador, 500); textoEvento = "Sorte:"; textoEventoLinha2 = "Ganha +500 R$"; break;
+    case 10: removeDinheiro(jogador, 200); textoEvento = "Reves:"; textoEventoLinha2 = "-200 R$"; break;
+    case 11: removeDinheiro(jogador, 150); textoEvento = "Reves:"; textoEventoLinha2 = "-150 R$"; break;
+    case 12: { int totalReceber = 0; for (int i = 0; i < numJogadores; i++) { if (i != jogador && ativo[i]) { removeDinheiro(i, 100); verificarStatusJogador(i); totalReceber += 100; } } addDinheiro(jogador, totalReceber); textoEvento = "Sorte:"; textoEventoLinha2 = "Outros te pagam"; textoEventoLinha3 = "100 R$ cada"; break; }
+    case 13: removeDinheiro(jogador, 80); textoEvento = "Reves:"; textoEventoLinha2 = "-80 R$"; break;
+    case 14: removeDinheiro(jogador, 600); textoEvento = "Reves:"; textoEventoLinha2 = "-600 R$"; break;
+    case 15: posicaoJogador[jogador] = (posicaoJogador[jogador] + 3 + numCasas) % numCasas; textoEvento = "Sorte:"; textoEventoLinha2 = "Ande 3 casas"; break;
+    case 16: addDinheiro(jogador, 100); textoEvento = "Sorte:"; textoEventoLinha2 = "+100 R$"; break;
+    case 17: posicaoJogador[jogador] = (posicaoJogador[jogador] + 5 + numCasas) % numCasas; textoEvento = "Sorte:"; textoEventoLinha2 = "Ande 5 casas"; break;
+    case 18: removeDinheiro(jogador, 120); textoEvento = "Reves:"; textoEventoLinha2 = "-120 R$"; break;
+    case 19: posicaoJogador[jogador] = (posicaoJogador[jogador] + 5 + numCasas) % numCasas; textoEvento = "Sorte:"; textoEventoLinha2 = "Ande 5 casas"; break;
   }
 }
 
@@ -321,221 +277,376 @@ void mostrarEventoEspecial() {
   lcd.print(textoEventoLinha2);
   lcd.setCursor(0, 2);
   lcd.print(textoEventoLinha3);
-  delay(4000);
+  esperarBotaoAvancar();
 }
 
-// Função para perguntar via Serial se o jogador quer comprar a casa
 bool perguntarCompra(int jogador, int casa) {
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("J");
   lcd.print(jogador + 1);
-  lcd.print(" casa:");
+  lcd.print(", Comprar?");
   lcd.setCursor(0, 1);
   String nome = nomeCasa(casa);
-  if (nome.length() > 16) nome = nome.substring(0, 16);
-  lcd.print(nome);
+  lcd.print(nome.substring(0, 19));
+
   lcd.setCursor(0, 2);
   lcd.print("Preco: R$");
   lcd.print(precoCasa[casa]);
-  lcd.setCursor(0, 3);
-  lcd.print("Comprar? (s/n)");
 
-  Serial.println("Jogador " + String(jogador+1) + " caiu em " + nomeCasa(casa) + ", preço R$" + String(precoCasa[casa]) + ".");
-  Serial.println("Deseja comprar esta casa? (s/n)");
+  lcd.setCursor(0, 3);
+  lcd.print("Sim(P8) Nao(P7)   ");
+
+  Serial.println("Jogador " + String(jogador + 1) + " em " + nomeCasa(casa) + ", preco R$" + String(precoCasa[casa]) + ".");
+  Serial.println("Comprar? (Botao Pino8=SIM, Botao Pino7=NAO)");
+  
+  unsigned long startDebounceSim = 0;
+  bool buttonStateSim = HIGH;
+  bool lastButtonStateSim = HIGH;
+  
+  unsigned long startDebounceNao = 0;
+  bool buttonStateNao = HIGH;
+  bool lastButtonStateNao = HIGH;
 
   while (true) {
-    if (Serial.available() > 0) {
-      char resposta = Serial.read();
-      if (resposta == 's' || resposta == 'S') {
+    lastButtonStateSim = buttonStateSim;
+    buttonStateSim = digitalRead(BOTAO_COMPRAR_SIM);
+    if (lastButtonStateSim == HIGH && buttonStateSim == LOW) startDebounceSim = millis();
+    if (lastButtonStateSim == LOW && buttonStateSim == HIGH && (millis() - startDebounceSim) > 50) {
         if (saldoJogador[jogador] >= precoCasa[casa]) {
-          removeDinheiro(jogador, precoCasa[casa]);
-          donoCasa[casa] = jogador;
-          numeroCasasConstruidas[casa] = 0; // sem construções inicialmente
-          lcd.clear();
-          lcd.setCursor(0,0);
-          lcd.print("Casa comprada!");
-          delay(2000);
-          return true;
+            removeDinheiro(jogador, precoCasa[casa]);
+            donoCasa[casa] = jogador;
+            numeroCasasConstruidas[casa] = 0;
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Casa Comprada!");
+            lcd.setCursor(0, 1);
+            lcd.print(nome.substring(0,19));
+            esperarBotaoAvancar();
+            return true;
         } else {
-          lcd.clear();
-          lcd.setCursor(0,0);
-          lcd.print("Saldo insufic");
-          lcd.setCursor(0,1);
-          lcd.print("Compra cancelada");
-          delay(2000);
-          return false;
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Saldo Insufic.");
+            esperarBotaoAvancar();
+            return false;
         }
-      } else if (resposta == 'n' || resposta == 'N') {
-        lcd.clear();
-        lcd.setCursor(0,0);
-        lcd.print("Compra negada");
-        delay(2000);
-        return false;
-      }
     }
+
+    lastButtonStateNao = buttonStateNao;
+    buttonStateNao = digitalRead(BOTAO_AVANCAR_NAO_COMPRAR);
+    if (lastButtonStateNao == HIGH && buttonStateNao == LOW) startDebounceNao = millis();
+    if (lastButtonStateNao == LOW && buttonStateNao == HIGH && (millis() - startDebounceNao) > 50) {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Compra Recusada.");
+        esperarBotaoAvancar();
+        return false;
+    }
+    delay(10);
   }
 }
 
-// Função para perguntar se o dono quer construir casas ou mansão
 void tentarConstruir(int jogador, int casa) {
-  if (donoCasa[casa] != jogador) return; // Só dono pode construir
-  if (numeroCasasConstruidas[casa] >= 4) return; // Já tem mansão, não pode construir mais
+  if (donoCasa[casa] != jogador) return;
+  if (numeroCasasConstruidas[casa] >= 4) {
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Max. Construcoes");
+    lcd.setCursor(0,1);
+    lcd.print(nomeCasa(casa).substring(0,19));
+    esperarBotaoAvancar();
+    return;
+  }
 
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("J");
   lcd.print(jogador + 1);
-  lcd.print(" Casa?");
+  lcd.print(", Construir em");
   lcd.setCursor(0, 1);
-  lcd.print("Preco 40 R$");
+  String nome = nomeCasa(casa);
+  lcd.print(nome.substring(0, 19));
+
   lcd.setCursor(0, 2);
   if (numeroCasasConstruidas[casa] < 3)
     lcd.print("Casinha ");
   else
-    lcd.print("Mansao   ");
-  lcd.setCursor(0, 3);
-  lcd.print("Comprar? (s/n)");
+    lcd.print("Mansao "); 
+  lcd.print("40R$?");
 
-  Serial.println("Jogador " + String(jogador+1) + " passou pela casa " + nomeCasa(casa) + ".");
-  if (numeroCasasConstruidas[casa] < 3)
-    Serial.println("Deseja comprar casinha por 40 R$? (s/n)");
-  else
-    Serial.println("Deseja comprar mansao por 40 R$? (s/n)");
+  lcd.setCursor(0, 3);
+  lcd.print("Sim(P8) Nao(P7)   ");
+
+  Serial.println("Jogador " + String(jogador + 1) + " pode construir em " + nomeCasa(casa) + ".");
+  Serial.println("Preco: 40 R$. (Botao Pino8=SIM, Botao Pino7=NAO)");
 
   unsigned long tempoInicial = millis();
-  while ((millis() - tempoInicial) < 15000) { // tempo maximo 15 seg para responder
-    if (Serial.available() > 0) {
-      char resposta = Serial.read();
-      if (resposta == 's' || resposta == 'S') {
+  bool respostaDada = false;
+  
+  unsigned long startDebounceSim = 0;
+  bool buttonStateSim = HIGH;
+  bool lastButtonStateSim = HIGH;
+  
+  unsigned long startDebounceNao = 0;
+  bool buttonStateNao = HIGH;
+  bool lastButtonStateNao = HIGH;
+
+  while (((millis() - tempoInicial) < 15000) && !respostaDada) {
+    lastButtonStateSim = buttonStateSim;
+    buttonStateSim = digitalRead(BOTAO_COMPRAR_SIM);
+    if (lastButtonStateSim == HIGH && buttonStateSim == LOW) startDebounceSim = millis();
+    if (lastButtonStateSim == LOW && buttonStateSim == HIGH && (millis() - startDebounceSim) > 50) {
+        respostaDada = true;
         if (saldoJogador[jogador] >= 40) {
-          removeDinheiro(jogador, 40);
-          numeroCasasConstruidas[casa]++;
-          lcd.clear();
-          lcd.setCursor(0, 0);
-          lcd.print("Construido:");
-          lcd.setCursor(0, 1);
-          if (numeroCasasConstruidas[casa] < 4)
-            lcd.print("Casinha ");
-          else
-            lcd.print("Mansao  ");
-          delay(2000);
-          return;
+            removeDinheiro(jogador, 40);
+            numeroCasasConstruidas[casa]++;
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Construcao OK!");
+            lcd.setCursor(0, 1);
+            if (numeroCasasConstruidas[casa] < 4)
+              lcd.print(String(numeroCasasConstruidas[casa]) + " casinha(s)");
+            else
+              lcd.print("Mansao pronta!");
+            esperarBotaoAvancar();
+            return;
         } else {
-          lcd.clear();
-          lcd.setCursor(0, 0);
-          lcd.print("Saldo insufic");
-          delay(2000);
-          return;
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Saldo Insufic.");
+            esperarBotaoAvancar();
+            return;
         }
-      } else if (resposta == 'n' || resposta == 'N') {
+    }
+
+    lastButtonStateNao = buttonStateNao;
+    buttonStateNao = digitalRead(BOTAO_AVANCAR_NAO_COMPRAR);
+    if (lastButtonStateNao == HIGH && buttonStateNao == LOW) startDebounceNao = millis();
+    if (lastButtonStateNao == LOW && buttonStateNao == HIGH && (millis() - startDebounceNao) > 50) {
+        respostaDada = true;
         lcd.clear();
         lcd.setCursor(0, 0);
-        lcd.print("Nao construido");
-        delay(2000);
+        lcd.print("Nao construido.");
+        esperarBotaoAvancar();
         return;
-      }
     }
+    delay(10);
   }
-  // Tempo expirou
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Sem resposta");
-  delay(2000);
+
+  if (!respostaDada) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Tempo Esgotado.");
+    lcd.setCursor(0,1);
+    lcd.print("Nao construido.");
+    esperarBotaoAvancar();
+  }
 }
 
-void eventoDaCasa(int jogador, int pos) {
-  String casa = nomeCasa(pos);
-  textoEvento = "J" + String(jogador + 1) + " em " + casa;
+// ----- FUNÇÃO eventoDaCasa MODIFICADA -----
+void eventoDaCasa(int jogador, int posJogador) {
+  String nomeDaCasaAtual = nomeCasa(posJogador);
+  bool acaoDaCasaRealizadaOuTransferida = false; 
+
+  textoEvento = "";       // Limpa as strings de evento globais
   textoEventoLinha2 = "";
   textoEventoLinha3 = "";
 
-  // Se casa é comprável e tem dono, cobrar aluguel
-  if (precoCasa[pos] > 0) { // casa comprável
-    if (donoCasa[pos] == -1) {
-      // Casa sem dono - perguntar compra
-      perguntarCompra(jogador, pos);
-    } else if (donoCasa[pos] != jogador) {
-      // Casa com dono - pagar aluguel 20% do preco + adicional por casas/mansão
-      int aluguelBase = precoCasa[pos] * 0.2;
-      int casas = numeroCasasConstruidas[pos];
-      int aluguel = aluguelBase + (casas * 4); // +4 por casa construída
+  switch (posJogador) {
+    case 0: // Início
+      textoEvento = "J" + String(jogador + 1) + " no Inicio";
+      textoEventoLinha2 = "Bem-vindo de volta!";
+      // Não há bônus por CAIR no início, apenas por PASSAR.
+      // Se quiser bônus por cair aqui, adicione addDinheiro()
+      acaoDaCasaRealizadaOuTransferida = true;
+      break;
 
-      removeDinheiro(jogador, aluguel);
-      addDinheiro(donoCasa[pos], aluguel);
+    case 4: case 17: // Sorte ou Revés
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("J" + String(jogador+1) + " em");
+      lcd.setCursor(0,1);
+      lcd.print(nomeDaCasaAtual.substring(0,19)); // Mostra "Sorte ou Reves"
+      esperarBotaoAvancar(); 
+      eventoEspecial(jogador);  // Sorteia e aplica o evento (pode mudar saldo, posição, etc.)
+      mostrarEventoEspecial();  // Mostra o resultado do evento sorteado
+      // Se eventoEspecial moveu o jogador, a nova casa NÃO será processada neste turno.
+      return; // Finaliza o evento da casa aqui.
 
-      textoEvento = "J" + String(jogador + 1) + " paga";
-      textoEventoLinha2 = "aluguel R$" + String(aluguel);
-      textoEventoLinha3 = "para J" + String(donoCasa[pos] + 1);
-    } else {
-      // Jogador dono, tenta construir casas/mansão
-      tentarConstruir(jogador, pos);
-    }
+    case 6:   // Vá para Jaula
+      lcd.clear();
+      lcd.setCursor(0,0); lcd.print("J" + String(jogador+1));
+      lcd.setCursor(0,1); lcd.print("VAI PARA JAULA!");
+      preso[jogador] = true;
+      turnosPreso[jogador] = 3;
+      posicaoJogador[jogador] = 18; // Manda o jogador para a posição da Jaula
+      lcd.setCursor(0,2); lcd.print("(Pos.18) 3 turnos");
+      esperarBotaoAvancar();
+      return; // Finaliza o evento da casa aqui.
+
+    case 18: // Jaula (Visitando ou Preso)
+      if (!preso[jogador]) { 
+        textoEvento = "J" + String(jogador + 1);
+        textoEventoLinha2 = "Visitando Jaula";
+        textoEventoLinha3 = "Sem acao.";
+      } else { // Jogador está preso
+        textoEvento = "J" + String(jogador + 1);
+        textoEventoLinha2 = "Na Jaula...";
+        textoEventoLinha3 = "Turnos: " + String(turnosPreso[jogador]);
+      }
+      acaoDaCasaRealizadaOuTransferida = true;
+      break;
+    
+    case 12: // Feriado
+        textoEvento = "J" + String(jogador + 1) + " em Feriado";
+        textoEventoLinha2 = "Dia de Sorte!";
+        addDinheiro(jogador, 100); // Exemplo de bônus
+        textoEventoLinha3 = "Ganhou R$100";
+        acaoDaCasaRealizadaOuTransferida = true;
+        break;
+    
+    // CASOS PARA CASAS COMPRÁVEIS QUE TINHAM EFEITOS DIRETOS FORAM REMOVIDOS.
+    // Se posJogador corresponder a uma casa comprável (ex: Santo Amaro, Derby, etc.),
+    // o switch não terá um 'case' para ela.
+    // 'acaoDaCasaRealizadaOuTransferida' permanecerá 'false' (seu valor inicial).
+    // A lógica cairá para o 'else if (precoCasa[posJogador] > 0)' abaixo.
   }
 
-  // Eventos tradicionais conforme casa
-  switch (pos) {
-    case 0:  addDinheiro(jogador, 200); textoEvento += " +R$200"; break;
-    case 4:
-    case 17:
-      eventoEspecial(jogador);
-      break;
-    case 6:  preso[jogador] = true; turnosPreso[jogador] = 3; textoEvento += " Prisao 3 t"; break;
-    case 18: removeDinheiro(jogador, 40); preso[jogador] = true; turnosPreso[jogador] = 3; textoEvento += " Prisao 3 t -R$40"; break;
-    // Outras casas que movimentam jogador para posições específicas ou afetam saldo:
-    case 2:  posicaoJogador[jogador] = 10; textoEvento += " Avanca a Derby"; break;
-    case 7:  posicaoJogador[jogador] += 3; if (posicaoJogador[jogador] > 23) posicaoJogador[jogador] -= 24; textoEvento += " Avanca 3"; break;
-    case 8:  posicaoJogador[jogador] -= 2; if (posicaoJogador[jogador] < 0) posicaoJogador[jogador] += 24; textoEvento += " Volta 2"; break;
-    case 12: posicaoJogador[jogador] = 0; textoEvento += " Volta inicio"; break;
-    case 16: posicaoJogador[jogador] = 5; textoEvento += " Avanca Iputinga"; break;
-    case 1:  removeDinheiro(jogador, 50); textoEvento += " -R$50"; break;
-    case 3:  addDinheiro(jogador, 100); textoEvento += " +R$100"; break;
-    case 5:  addDinheiro(jogador, 150); textoEvento += " +R$150"; break;
-    case 9:  removeDinheiro(jogador, 30); textoEvento += " -R$30"; break;
-    case 10: textoEvento += " Livre"; break;
-    case 11: addDinheiro(jogador, 50); textoEvento += " +R$50"; break;
-    case 13: removeDinheiro(jogador, 100); textoEvento += " -R$100"; break;
-    case 14: addDinheiro(jogador, 200); textoEvento += " +R$200"; break;
-    case 15: removeDinheiro(jogador, 150); textoEvento += " -R$150"; break;
-    case 19: addDinheiro(jogador, 120); textoEvento += " +R$120"; break;
-    case 20: removeDinheiro(jogador, 80); textoEvento += " -R$80"; break;
-    case 21: addDinheiro(jogador, 70); textoEvento += " +R$70"; break;
-    case 22: removeDinheiro(jogador, 60); textoEvento += " -R$60"; break;
-    case 23: addDinheiro(jogador, 90); textoEvento += " +R$90"; break;
-    default: if (precoCasa[pos] == 0) textoEvento = "Posicao invalida!"; break;
+  // Após o switch, processa com base em acaoDaCasaRealizadaOuTransferida
+  if (acaoDaCasaRealizadaOuTransferida) {
+    // Se foi uma casa de efeito direto do switch (Início, Jaula-Visita, Feriado)
+    // Os casos Sorte/Revés e Vá para Jaula já deram 'return'.
+    lcd.clear();
+    lcd.setCursor(0,0); lcd.print(textoEvento);
+    lcd.setCursor(0,1); lcd.print(textoEventoLinha2);
+    lcd.setCursor(0,2); lcd.print(textoEventoLinha3);
+    esperarBotaoAvancar();
+  } else if (precoCasa[posJogador] > 0) { 
+    // É uma propriedade comprável E NÃO teve uma ação direta no switch acima.
+    // Esta é a lógica padrão para todas as propriedades.
+    if (donoCasa[posJogador] == -1) { // Propriedade sem dono
+      perguntarCompra(jogador, posJogador); 
+    } else if (donoCasa[posJogador] != jogador) { // Pertence a outro jogador, pagar aluguel
+      int proprietario = donoCasa[posJogador];
+      int casasConst = numeroCasasConstruidas[posJogador]; 
+      int precoDaPropriedade = precoCasa[posJogador];
+      float aluguelCalculado = 0.0f;
+
+      aluguelCalculado = (float)precoDaPropriedade * 0.20f; 
+
+      if (casasConst == 1) { 
+          aluguelCalculado += (float)precoDaPropriedade * 0.05f;
+      } else if (casasConst == 2) { 
+          aluguelCalculado += (float)precoDaPropriedade * 0.10f; 
+      } else if (casasConst == 3) { 
+          aluguelCalculado += (float)precoDaPropriedade * 0.15f; 
+          aluguelCalculado += (float)precoDaPropriedade * 0.10f; 
+      } else if (casasConst >= 4) { 
+          aluguelCalculado += (float)precoDaPropriedade * 0.20f; 
+          aluguelCalculado += (float)precoDaPropriedade * 0.10f; 
+      }
+
+      int aluguelTotal = static_cast<int>(aluguelCalculado);
+      
+      if (precoDaPropriedade > 0 && aluguelTotal == 0 && aluguelCalculado > 0.0f) {
+          aluguelTotal = 1; 
+      }
+      
+      textoEvento = "J" + String(jogador + 1) + " paga";
+      textoEventoLinha2 = "Aluguel R$" + String(aluguelTotal);
+      textoEventoLinha3 = "Para J" + String(proprietario + 1);
+      
+      lcd.clear();
+      lcd.setCursor(0,0); lcd.print(textoEvento);
+      lcd.setCursor(0,1); lcd.print(textoEventoLinha2);
+      lcd.setCursor(0,2); lcd.print(textoEventoLinha3);
+
+      removeDinheiro(jogador, aluguelTotal);
+      addDinheiro(proprietario, aluguelTotal);
+      
+      esperarBotaoAvancar();
+    } else { // Jogador atual é o dono da propriedade
+      tentarConstruir(jogador, posJogador);
+    }
+  } else if (precoCasa[posJogador] == 0 && !acaoDaCasaRealizadaOuTransferida) {
+    // Este bloco é para casas com precoCasa[posJogador] == 0 que NÃO foram tratadas
+    // no switch (ou seja, não definiram acaoDaCasaRealizadaOuTransferida = true ou não deram return).
+    // Com as mudanças, todas as casas com preço 0 estão no switch.
+    // Então, este bloco teoricamente não deveria ser alcançado.
+    // Mas é uma boa salvaguarda para uma "casa desconhecida" com preço 0.
+    lcd.clear();
+    lcd.setCursor(0,0); lcd.print("J" + String(jogador+1) + " em");
+    lcd.setCursor(0,1); lcd.print(nomeDaCasaAtual.substring(0,19));
+    lcd.setCursor(0,2); lcd.print("Sem acao definida."); // Mensagem mais genérica
+    esperarBotaoAvancar();
   }
 }
+// ----- FIM DA FUNÇÃO eventoDaCasa MODIFICADA -----
 
 void setup() {
   Serial.begin(9600);
   lcd.init();
   lcd.backlight();
-  randomSeed(analogRead(0));
+  randomSeed(analogRead(A0)); 
+
+  pinMode(BOTAO_AVANCAR_NAO_COMPRAR, INPUT_PULLUP);
+  pinMode(BOTAO_COMPRAR_SIM, INPUT_PULLUP);
 
   for (int i = 0; i < numCasas; i++) {
-    donoCasa[i] = -1; // Nenhum dono inicialmente
+    donoCasa[i] = -1;
     numeroCasasConstruidas[i] = 0;
   }
 
+  lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Jogo Iniciado!");
-  delay(2000);
+  lcd.print("Super Banco LCD");
+  lcd.setCursor(0,1);
+  lcd.print("Aperte Avancar(P7)");
+  esperarBotaoAvancar(); 
   lcd.clear();
 
   Serial.println("Jogo Iniciado!");
-  Serial.println("Aperte s para comprar ou n para passar quando solicitado.");
+  Serial.println("Botao Pino7: Avancar/Nao.");
+  Serial.println("Botao Pino8: Sim/Comprar/Construir.");
 }
 
 void loop() {
-  // Verifica se só restou um jogador ativo ou algum chegou a 3000
-  if (verificarVencedor()) {
-    while(true) delay(1000); // Para o jogo após vitória
+  if (numJogadores == 0) { 
+    configurarJogadores();
+    if(numJogadores == 0) { 
+        lcd.clear();
+        lcd.print("Erro: Jogadores?");
+        delay(2000); 
+        return; 
+    }
+    for(int i=0; i<numJogadores; ++i) {
+        posicaoJogador[i] = 0;
+        saldoJogador[i] = 1000;
+        preso[i] = false;
+        turnosPreso[i] = 0;
+        ativo[i] = true; 
+    }
+    for (int i = 0; i < numCasas; i++) { 
+        donoCasa[i] = -1;
+        numeroCasasConstruidas[i] = 0;
+    }
+    jogadorAtual = 0; 
+    lcd.clear();
+    lcd.print("Novo Jogo!");
+    esperarBotaoAvancar();
   }
 
-  // Pula jogadores eliminados
+  if (verificarVencedor()) {
+    while (true) { 
+        lcd.noBacklight(); delay(300);
+        lcd.backlight(); delay(300);
+    }
+  }
+
   if (!ativo[jogadorAtual]) {
     jogadorAtual = (jogadorAtual + 1) % numJogadores;
-    return;
+    return; 
   }
 
   lcd.clear();
@@ -544,74 +655,93 @@ void loop() {
     lcd.setCursor(0, 0);
     lcd.print("J");
     lcd.print(jogadorAtual + 1);
-    lcd.print(" preso t:");
-    lcd.print(turnosPreso[jogadorAtual]);
-
+    lcd.print(" PRESO na Jaula"); 
     lcd.setCursor(0, 1);
-    lcd.print("Saldo:");
-    lcd.print(saldoJogador[jogadorAtual]);
-
+    lcd.print("Turnos restantes:");
+    lcd.print(turnosPreso[jogadorAtual]);
     lcd.setCursor(0, 2);
-    lcd.print("Aguarde turno");
-
-    delay(3000);
+    lcd.print("Saldo: R$");
+    lcd.print(saldoJogador[jogadorAtual]);
+    
+    esperarBotaoAvancar(); 
 
     turnosPreso[jogadorAtual]--;
     if (turnosPreso[jogadorAtual] <= 0) {
       preso[jogadorAtual] = false;
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("J" + String(jogadorAtual+1) + " esta livre!");
+      esperarBotaoAvancar();
     }
     jogadorAtual = (jogadorAtual + 1) % numJogadores;
-    return;
+    return; 
   }
 
-  int dado = random(1, 7);
-  posicaoJogador[jogadorAtual] += dado;
-  if (posicaoJogador[jogadorAtual] > 23)
-    posicaoJogador[jogadorAtual] -= 24;
+  lcd.setCursor(0,0);
+  lcd.print("Vez de J");
+  lcd.print(jogadorAtual + 1);
+  lcd.setCursor(0,1);
+  lcd.print("Saldo: R$");
+  lcd.print(saldoJogador[jogadorAtual]);
+  lcd.setCursor(0,2);
+  lcd.print("Pressione P7 para");
+  lcd.setCursor(0,3);
+  lcd.print("jogar o dado...");
+  esperarBotaoAvancar(); 
 
-  eventoDaCasa(jogadorAtual, posicaoJogador[jogadorAtual]);
+  int dado = random(1, 7); 
+  int posAnterior = posicaoJogador[jogadorAtual];
+  posicaoJogador[jogadorAtual] = (posicaoJogador[jogadorAtual] + dado) % numCasas;
 
-  // Após ação da casa, verifica saldo do jogador e elimina se necessário
-  verificarStatusJogador(jogadorAtual);
-
-  // Mostrar evento especial se casa for 4 ou 17
-  if (posicaoJogador[jogadorAtual] == 4 || posicaoJogador[jogadorAtual] == 17) {
-    mostrarEventoEspecial();
-  }
-
+  lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("J");
   lcd.print(jogadorAtual + 1);
-  lcd.print("    Dado:");
+  lcd.print(" tirou ");
   lcd.print(dado);
+  lcd.setCursor(0, 1);
+  lcd.print("Foi para:");
+  lcd.setCursor(0,2);
+  lcd.print(nomeCasa(posicaoJogador[jogadorAtual]).substring(0,19));
+  esperarBotaoAvancar();
+
+  if (posAnterior + dado >= numCasas && posicaoJogador[jogadorAtual] != 0) { 
+    addDinheiro(jogadorAtual, 200); 
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("J" + String(jogadorAtual+1) + " passou");
+    lcd.setCursor(0,1);
+    lcd.print("pelo INICIO!");
+    lcd.setCursor(0,2);
+    lcd.print("Recebeu +R$200");
+    esperarBotaoAvancar();
+  }
+  
+  eventoDaCasa(jogadorAtual, posicaoJogador[jogadorAtual]);
+  
+  verificarStatusJogador(jogadorAtual); 
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Fim do turno: J");
+  lcd.print(jogadorAtual + 1);
 
   lcd.setCursor(0, 1);
-  String casa = nomeCasa(posicaoJogador[jogadorAtual]);
-  if (casa.length() > 16) casa = casa.substring(0, 16);
-  lcd.print("");
-  lcd.print(casa);
+  String casaAtualStr = nomeCasa(posicaoJogador[jogadorAtual]);
+  lcd.print(casaAtualStr.substring(0, 19)); 
+
+  String s1="", s2="", s3="", s4="";
+  if (numJogadores >=1 && ativo[0]) s1 = "J1:" + String(saldoJogador[0]); else if (numJogadores >=1) s1 = "J1: X ";
+  if (numJogadores >=2 && ativo[1]) s2 = " J2:" + String(saldoJogador[1]); else if (numJogadores >=2) s2 = " J2: X ";
+  if (numJogadores >=3 && ativo[2]) s3 = "J3:" + String(saldoJogador[2]); else if (numJogadores >=3) s3 = "J3: X ";
+  if (numJogadores >=4 && ativo[3]) s4 = " J4:" + String(saldoJogador[3]); else if (numJogadores >=4) s4 = " J4: X ";
 
   lcd.setCursor(0, 2);
-  lcd.print("J1=");
-  lcd.print(saldoJogador[0]);
-  if (saldoJogador[0] < 10) lcd.print(" ");
-  else if (saldoJogador[0] < 100) lcd.print(" ");
-  lcd.print(" J2=");
-  lcd.print(saldoJogador[1]);
-  if (saldoJogador[1] < 10) lcd.print(" ");
-  else if (saldoJogador[1] < 100) lcd.print(" ");
-
+  lcd.print(s1.substring(0,9) + s2.substring(0,10)); 
   lcd.setCursor(0, 3);
-  lcd.print("J3=");
-  lcd.print(saldoJogador[2]);
-  if (saldoJogador[2] < 10) lcd.print(" ");
-  else if (saldoJogador[2] < 100) lcd.print(" ");
-  lcd.print(" J4=");
-  lcd.print(saldoJogador[3]);
-  if (saldoJogador[3] < 10) lcd.print(" ");
-  else if (saldoJogador[3] < 100) lcd.print(" ");
+  lcd.print(s3.substring(0,9) + s4.substring(0,10)); 
 
-  delay(5000);
+  esperarBotaoAvancar(); 
 
   jogadorAtual = (jogadorAtual + 1) % numJogadores;
 }
