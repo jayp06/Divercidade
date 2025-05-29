@@ -1,7 +1,6 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-// Se for usar round() para o aluguel, descomente a linha abaixo:
-// #include <math.h>
+// #include <math.h> // Descomente se for usar round() para o aluguel
 
 LiquidCrystal_I2C lcd(0x27, 20, 4); // LCD 20x4
 
@@ -19,6 +18,8 @@ int donoCasa[numCasas];
 
 const int BOTAO_AVANCAR_NAO_COMPRAR = 7;
 const int BOTAO_COMPRAR_SIM = 8;
+const int BOTAO_CONFIRMA_JOGADOR = 9;
+const int BOTAO_SELECIONA_JOGADOR = 12;
 
 void configurarJogadores();
 String nomeCasa(int pos);
@@ -40,93 +41,160 @@ String textoEvento = "";
 String textoEventoLinha2 = "";
 String textoEventoLinha3 = "";
 
-// --- FUNÇÃO DE ESPERA MODIFICADA (COM DEPURAÇÃO) ---
+// --- FUNÇÃO DE ESPERA PARA PINO 7 (COM DEPURAÇÃO) ---
 void esperarBotaoAvancar() {
-  Serial.println("DEBUG: Entrou em esperarBotaoAvancar().");
+  Serial.println("DEBUG_P7: Entrou em esperarBotaoAvancar().");
   unsigned long startDebounce = 0;
   bool currentButtonState = digitalRead(BOTAO_AVANCAR_NAO_COMPRAR);
-  bool lastButtonState = currentButtonState; 
+  bool lastButtonState = currentButtonState;
   unsigned long lastDebugPrintTime = millis();
 
-  Serial.print("DEBUG: Estado inicial do botao (P7): ");
+  Serial.print("DEBUG_P7: Estado inicial do botao (P7): ");
   Serial.println(currentButtonState == HIGH ? "HIGH (solto)" : "LOW (pressionado)");
 
   while (true) {
     currentButtonState = digitalRead(BOTAO_AVANCAR_NAO_COMPRAR);
 
-    if (currentButtonState != lastButtonState) { 
-      Serial.print("DEBUG: Mudanca de estado! Anterior: ");
+    if (currentButtonState != lastButtonState) {
+      Serial.print("DEBUG_P7: Mudanca de estado! Anterior: ");
       Serial.print(lastButtonState == HIGH ? "HIGH" : "LOW");
       Serial.print(", Atual: ");
       Serial.println(currentButtonState == HIGH ? "HIGH" : "LOW");
 
-      if (lastButtonState == HIGH && currentButtonState == LOW) { 
+      if (lastButtonState == HIGH && currentButtonState == LOW) {
         startDebounce = millis();
-        Serial.println("DEBUG: Botao Pressionado (H->L). Debounce timer iniciado.");
+        Serial.println("DEBUG_P7: Botao Pressionado (H->L). Debounce timer iniciado.");
       }
-      
-      if (lastButtonState == LOW && currentButtonState == HIGH) { 
+
+      if (lastButtonState == LOW && currentButtonState == HIGH) {
         unsigned long tempoDecorrido = millis() - startDebounce;
-        Serial.print("DEBUG: Botao Solto (L->H). Tempo desde debounce: ");
+        Serial.print("DEBUG_P7: Botao Solto (L->H). Tempo desde debounce: ");
         Serial.print(tempoDecorrido);
         Serial.println("ms");
-        if ( tempoDecorrido > 50) { 
-          Serial.println("DEBUG: Debounce OK. Saindo de esperarBotaoAvancar().");
-          return; 
+        if ( tempoDecorrido > 50) {
+          Serial.println("DEBUG_P7: Debounce OK. Saindo de esperarBotaoAvancar().");
+          return;
         } else {
-          Serial.println("DEBUG: Debounce FALHOU (muito rapido). Continuando a esperar.");
+          Serial.println("DEBUG_P7: Debounce FALHOU (muito rapido). Continuando a esperar.");
         }
       }
     }
-    lastButtonState = currentButtonState; 
+    lastButtonState = currentButtonState;
 
-    if (millis() - lastDebugPrintTime > 1000) { 
-        Serial.print("DEBUG: ...esperando... Estado atual do botao (P7): ");
+    if (millis() - lastDebugPrintTime > 1000) {
+        Serial.print("DEBUG_P7: ...esperando... Estado atual do botao (P7): ");
         Serial.println(digitalRead(BOTAO_AVANCAR_NAO_COMPRAR) == HIGH ? "HIGH (solto)" : "LOW (pressionado)");
         lastDebugPrintTime = millis();
     }
-    delay(10); 
+    delay(10);
   }
 }
-// --- FIM DA FUNÇÃO DE ESPERA (COM DEPURAÇÃO) ---
+// --- FIM DA FUNÇÃO DE ESPERA PARA PINO 7 ---
 
+// ----- FUNÇÃO configurarJogadores REVISADA E CORRIGIDA -----
 void configurarJogadores() {
-  Serial.println("Quantos jogadores (1 a 4)?");
+  int jogadoresCandidatos = 1;
+  bool confirmado = false;
+  const long debounceDelay = 50; // milissegundos
+
+  // Variáveis para o Botão de SELEÇÃO (Pino 12)
+  unsigned long lastDebounceTimeSelecao = 0;
+  bool lastRawStateSelecao = HIGH;         // Último estado bruto lido do Pino 12
+  bool acionamentoSelecaoFeito = false;    // Flag para garantir um incremento por pressionamento
+
+  // Variáveis para o Botão de CONFIRMAÇÃO (Pino 9)
+  unsigned long lastDebounceTimeConfirmacao = 0;
+  bool lastRawStateConfirmacao = HIGH;     // Último estado bruto lido do Pino 9
+  bool lastSteadyStateConfirmacao = HIGH;  // Último estado estável (debounced) do Pino 9
+
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Jogadores (1-4)?");
-  while (true) {
-    if (Serial.available() > 0) {
-      int jogadoresInput = Serial.parseInt(); 
-      if (jogadoresInput >= 1 && jogadoresInput <= 4) {
-        numJogadores = jogadoresInput;
-        for (int i = 0; i < numJogadores; i++) {
-          ativo[i] = true;
-          posicaoJogador[i] = 0; 
-          saldoJogador[i] = 1000; 
-          preso[i] = false;
-          turnosPreso[i] = 0;
+  lcd.print("Num. Jogadores:");
+  lcd.setCursor(0, 2);
+  lcd.print("P12:Muda / P9:OK");
+
+  while (!confirmado) {
+    lcd.setCursor(8, 1); // Exibe o número de jogadores candidatos
+    lcd.print(jogadoresCandidatos);
+    lcd.print(" ");
+
+    // --- Lógica do Botão de SELEÇÃO (Pino 12) ---
+    bool currentRawStateSelecao = digitalRead(BOTAO_SELECIONA_JOGADOR);
+
+    // Se o estado bruto mudou, reseta o timer de debounce
+    if (currentRawStateSelecao != lastRawStateSelecao) {
+      lastDebounceTimeSelecao = millis();
+    }
+
+    // Se o tempo desde a última mudança bruta passou do debounceDelay
+    if ((millis() - lastDebounceTimeSelecao) > debounceDelay) {
+      // Agora currentRawStateSelecao é considerado estável
+      if (currentRawStateSelecao == LOW && !acionamentoSelecaoFeito) { // Botão pressionado e ação ainda não feita
+        jogadoresCandidatos++;
+        if (jogadoresCandidatos > 4) {
+          jogadoresCandidatos = 1;
         }
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Jogadores:");
-        lcd.setCursor(0, 1);
-        lcd.print(numJogadores);
-        esperarBotaoAvancar(); 
-        break;
-      } else {
-        Serial.println("Por favor, insira um numero valido (1 a 4).");
-        lcd.setCursor(0,1);
-        lcd.print("Entrada invalida!");
-        delay(1000);
-        lcd.setCursor(0,0);
-        lcd.print("Jogadores (1-4)?  ");
-        lcd.setCursor(0,1);
-        lcd.print("                ");
+        Serial.print("DEBUG_CFG: Pino 12 Pressionado. Jogadores candidatos: ");
+        Serial.println(jogadoresCandidatos);
+        acionamentoSelecaoFeito = true; // Marca que já incrementou para este pressionamento
+      } else if (currentRawStateSelecao == HIGH) {
+        acionamentoSelecaoFeito = false; // Permite novo incremento quando o botão for solto
       }
     }
+    lastRawStateSelecao = currentRawStateSelecao; // Atualiza o último estado bruto lido
+
+
+    // --- Lógica do Botão de CONFIRMAÇÃO (Pino 9) ---
+    bool currentRawStateConfirmacao = digitalRead(BOTAO_CONFIRMA_JOGADOR);
+
+    // Se o estado bruto mudou, reseta o timer de debounce
+    if (currentRawStateConfirmacao != lastRawStateConfirmacao) {
+      lastDebounceTimeConfirmacao = millis();
+    }
+
+    // Se o tempo desde a última mudança bruta passou do debounceDelay
+    if ((millis() - lastDebounceTimeConfirmacao) > debounceDelay) {
+      // Agora currentRawStateConfirmacao é considerado estável
+      // Se o estado estável atual (currentRawStateConfirmacao) é diferente do último estado estável conhecido (lastSteadyStateConfirmacao)
+      // E o novo estado estável é LOW (pressionado)
+      if (currentRawStateConfirmacao != lastSteadyStateConfirmacao && currentRawStateConfirmacao == LOW) {
+        numJogadores = jogadoresCandidatos;
+        confirmado = true; // Sai do loop while
+        Serial.print("DEBUG_CFG: Pino 9 Pressionado. Jogadores confirmados: ");
+        Serial.println(numJogadores);
+      }
+      // Atualiza o último estado estável conhecido para a próxima verificação de borda
+      lastSteadyStateConfirmacao = currentRawStateConfirmacao;
+    }
+    // Atualiza o último estado bruto lido
+    lastRawStateConfirmacao = currentRawStateConfirmacao;
+
+    delay(20); // Pequeno delay para estabilidade e para o LCD atualizar
   }
+
+  // Após confirmar (sair do while loop)
+  for (int i = 0; i < numJogadores; i++) {
+    ativo[i] = true;
+    posicaoJogador[i] = 0;
+    saldoJogador[i] = 1000;
+    preso[i] = false;
+    turnosPreso[i] = 0;
+  }
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Jogadores:");
+  lcd.setCursor(0, 1);
+  lcd.print(numJogadores);
+  lcd.setCursor(0, 2);
+  lcd.print("Confirmado!");
+  lcd.setCursor(0, 3);
+  lcd.print("Avancar (P7)...");
+
+  esperarBotaoAvancar(); // Usa o botão do Pino 7 para avançar desta tela
 }
+// ----- FIM DA FUNÇÃO configurarJogadores -----
+
 
 String nomeCasa(int pos) {
   switch (pos) {
@@ -136,7 +204,7 @@ String nomeCasa(int pos) {
     case 3:  return "Encruzilhada";
     case 4:  return "Sorte ou Reves";
     case 5:  return "Iputinga";
-    case 6:  return "Va para Jaula"; 
+    case 6:  return "Va para Jaula";
     case 7:  return "Mustardinha";
     case 8:  return "Afogados";
     case 9:  return "Caxanga";
@@ -148,7 +216,7 @@ String nomeCasa(int pos) {
     case 15: return "Jaqueira";
     case 16: return "Casa Forte";
     case 17: return "Sorte ou Reves";
-    case 18: return "Jaula"; 
+    case 18: return "Jaula";
     case 19: return "Poco da Panela";
     case 20: return "Pina";
     case 21: return "Setubal";
@@ -167,7 +235,7 @@ void removeDinheiro(int jogador, int valor) {
 }
 
 void verificarStatusJogador(int jogador) {
-  if (ativo[jogador] && saldoJogador[jogador] < 0) { 
+  if (ativo[jogador] && saldoJogador[jogador] < 0) {
     ativo[jogador] = false;
     for (int i = 0; i < numCasas; i++) {
       if (donoCasa[i] == jogador) {
@@ -233,7 +301,7 @@ bool verificarVencedor() {
 
 void eventoEspecial(int jogador) {
   const int numEventos = 20;
-  int sorteio = random(0, numEventos); 
+  int sorteio = random(0, numEventos);
   textoEvento = "";
   textoEventoLinha2 = "";
   textoEventoLinha3 = "";
@@ -248,9 +316,9 @@ void eventoEspecial(int jogador) {
     case 6:
       preso[jogador] = true;
       turnosPreso[jogador] = 3;
-      posicaoJogador[jogador] = 18; 
+      posicaoJogador[jogador] = 18;
       textoEvento = "Reves:";
-      textoEventoLinha2 = "Va para Jaula!"; 
+      textoEventoLinha2 = "Va para Jaula!";
       textoEventoLinha3 = "(Pos.18) 3 turnos";
       break;
     case 7: removeDinheiro(jogador, 550); textoEvento = "Reves:"; textoEventoLinha2 = "-550 R$"; break;
@@ -299,11 +367,11 @@ bool perguntarCompra(int jogador, int casa) {
 
   Serial.println("Jogador " + String(jogador + 1) + " em " + nomeCasa(casa) + ", preco R$" + String(precoCasa[casa]) + ".");
   Serial.println("Comprar? (Botao Pino8=SIM, Botao Pino7=NAO)");
-  
+
   unsigned long startDebounceSim = 0;
   bool buttonStateSim = HIGH;
   bool lastButtonStateSim = HIGH;
-  
+
   unsigned long startDebounceNao = 0;
   bool buttonStateNao = HIGH;
   bool lastButtonStateNao = HIGH;
@@ -372,7 +440,7 @@ void tentarConstruir(int jogador, int casa) {
   if (numeroCasasConstruidas[casa] < 3)
     lcd.print("Casinha ");
   else
-    lcd.print("Mansao "); 
+    lcd.print("Mansao ");
   lcd.print("40R$?");
 
   lcd.setCursor(0, 3);
@@ -383,11 +451,11 @@ void tentarConstruir(int jogador, int casa) {
 
   unsigned long tempoInicial = millis();
   bool respostaDada = false;
-  
+
   unsigned long startDebounceSim = 0;
   bool buttonStateSim = HIGH;
   bool lastButtonStateSim = HIGH;
-  
+
   unsigned long startDebounceNao = 0;
   bool buttonStateNao = HIGH;
   bool lastButtonStateNao = HIGH;
@@ -444,119 +512,104 @@ void tentarConstruir(int jogador, int casa) {
   }
 }
 
-// ----- FUNÇÃO eventoDaCasa MODIFICADA -----
 void eventoDaCasa(int jogador, int posJogador) {
   String nomeDaCasaAtual = nomeCasa(posJogador);
-  bool acaoDaCasaRealizadaOuTransferida = false; 
+  bool acaoDaCasaRealizadaOuTransferida = false;
 
-  textoEvento = "";       // Limpa as strings de evento globais
+  textoEvento = "";
   textoEventoLinha2 = "";
   textoEventoLinha3 = "";
 
   switch (posJogador) {
-    case 0: // Início
+    case 0:
       textoEvento = "J" + String(jogador + 1) + " no Inicio";
       textoEventoLinha2 = "Bem-vindo de volta!";
-      // Não há bônus por CAIR no início, apenas por PASSAR.
-      // Se quiser bônus por cair aqui, adicione addDinheiro()
       acaoDaCasaRealizadaOuTransferida = true;
       break;
 
-    case 4: case 17: // Sorte ou Revés
+    case 4: case 17:
       lcd.clear();
       lcd.setCursor(0,0);
       lcd.print("J" + String(jogador+1) + " em");
       lcd.setCursor(0,1);
-      lcd.print(nomeDaCasaAtual.substring(0,19)); // Mostra "Sorte ou Reves"
-      esperarBotaoAvancar(); 
-      eventoEspecial(jogador);  // Sorteia e aplica o evento (pode mudar saldo, posição, etc.)
-      mostrarEventoEspecial();  // Mostra o resultado do evento sorteado
-      // Se eventoEspecial moveu o jogador, a nova casa NÃO será processada neste turno.
-      return; // Finaliza o evento da casa aqui.
+      lcd.print(nomeDaCasaAtual.substring(0,19));
+      esperarBotaoAvancar();
+      eventoEspecial(jogador);
+      mostrarEventoEspecial();
+      return;
 
-    case 6:   // Vá para Jaula
+    case 6:
       lcd.clear();
       lcd.setCursor(0,0); lcd.print("J" + String(jogador+1));
       lcd.setCursor(0,1); lcd.print("VAI PARA JAULA!");
       preso[jogador] = true;
       turnosPreso[jogador] = 3;
-      posicaoJogador[jogador] = 18; // Manda o jogador para a posição da Jaula
+      posicaoJogador[jogador] = 18;
       lcd.setCursor(0,2); lcd.print("(Pos.18) 3 turnos");
       esperarBotaoAvancar();
-      return; // Finaliza o evento da casa aqui.
+      return;
 
-    case 18: // Jaula (Visitando ou Preso)
-      if (!preso[jogador]) { 
+    case 18:
+      if (!preso[jogador]) {
         textoEvento = "J" + String(jogador + 1);
         textoEventoLinha2 = "Visitando Jaula";
         textoEventoLinha3 = "Sem acao.";
-      } else { // Jogador está preso
+      } else {
         textoEvento = "J" + String(jogador + 1);
         textoEventoLinha2 = "Na Jaula...";
         textoEventoLinha3 = "Turnos: " + String(turnosPreso[jogador]);
       }
       acaoDaCasaRealizadaOuTransferida = true;
       break;
-    
-    case 12: // Feriado
+
+    case 12:
         textoEvento = "J" + String(jogador + 1) + " em Feriado";
         textoEventoLinha2 = "Dia de Sorte!";
-        addDinheiro(jogador, 100); // Exemplo de bônus
+        addDinheiro(jogador, 100);
         textoEventoLinha3 = "Ganhou R$100";
         acaoDaCasaRealizadaOuTransferida = true;
         break;
-    
-    // CASOS PARA CASAS COMPRÁVEIS QUE TINHAM EFEITOS DIRETOS FORAM REMOVIDOS.
-    // Se posJogador corresponder a uma casa comprável (ex: Santo Amaro, Derby, etc.),
-    // o switch não terá um 'case' para ela.
-    // 'acaoDaCasaRealizadaOuTransferida' permanecerá 'false' (seu valor inicial).
-    // A lógica cairá para o 'else if (precoCasa[posJogador] > 0)' abaixo.
   }
 
-  // Após o switch, processa com base em acaoDaCasaRealizadaOuTransferida
   if (acaoDaCasaRealizadaOuTransferida) {
-    // Se foi uma casa de efeito direto do switch (Início, Jaula-Visita, Feriado)
-    // Os casos Sorte/Revés e Vá para Jaula já deram 'return'.
     lcd.clear();
     lcd.setCursor(0,0); lcd.print(textoEvento);
     lcd.setCursor(0,1); lcd.print(textoEventoLinha2);
     lcd.setCursor(0,2); lcd.print(textoEventoLinha3);
     esperarBotaoAvancar();
-  } else if (precoCasa[posJogador] > 0) { 
-    // É uma propriedade comprável E NÃO teve uma ação direta no switch acima.
-    // Esta é a lógica padrão para todas as propriedades.
-    if (donoCasa[posJogador] == -1) { // Propriedade sem dono
-      perguntarCompra(jogador, posJogador); 
-    } else if (donoCasa[posJogador] != jogador) { // Pertence a outro jogador, pagar aluguel
+  } else if (precoCasa[posJogador] > 0) {
+    if (donoCasa[posJogador] == -1) {
+      perguntarCompra(jogador, posJogador);
+    } else if (donoCasa[posJogador] != jogador) {
       int proprietario = donoCasa[posJogador];
-      int casasConst = numeroCasasConstruidas[posJogador]; 
+      int casasConst = numeroCasasConstruidas[posJogador];
       int precoDaPropriedade = precoCasa[posJogador];
       float aluguelCalculado = 0.0f;
 
-      aluguelCalculado = (float)precoDaPropriedade * 0.20f; 
+      aluguelCalculado = (float)precoDaPropriedade * 0.20f;
 
-      if (casasConst == 1) { 
+      if (casasConst == 1) {
           aluguelCalculado += (float)precoDaPropriedade * 0.05f;
-      } else if (casasConst == 2) { 
-          aluguelCalculado += (float)precoDaPropriedade * 0.10f; 
-      } else if (casasConst == 3) { 
-          aluguelCalculado += (float)precoDaPropriedade * 0.15f; 
-          aluguelCalculado += (float)precoDaPropriedade * 0.10f; 
-      } else if (casasConst >= 4) { 
-          aluguelCalculado += (float)precoDaPropriedade * 0.20f; 
-          aluguelCalculado += (float)precoDaPropriedade * 0.10f; 
+      } else if (casasConst == 2) {
+          aluguelCalculado += (float)precoDaPropriedade * 0.10f;
+      } else if (casasConst == 3) {
+          aluguelCalculado += (float)precoDaPropriedade * 0.15f;
+          aluguelCalculado += (float)precoDaPropriedade * 0.10f;
+      } else if (casasConst >= 4) {
+          aluguelCalculado += (float)precoDaPropriedade * 0.20f;
+          aluguelCalculado += (float)precoDaPropriedade * 0.10f;
       }
 
       int aluguelTotal = static_cast<int>(aluguelCalculado);
-      
+
       if (precoDaPropriedade > 0 && aluguelTotal == 0 && aluguelCalculado > 0.0f) {
-          aluguelTotal = 1; 
+          aluguelTotal = 1;
       }
-      
+
       textoEvento = "J" + String(jogador + 1) + " paga";
       textoEventoLinha2 = "Aluguel R$" + String(aluguelTotal);
       textoEventoLinha3 = "Para J" + String(proprietario + 1);
-      
+
       lcd.clear();
       lcd.setCursor(0,0); lcd.print(textoEvento);
       lcd.setCursor(0,1); lcd.print(textoEventoLinha2);
@@ -564,34 +617,31 @@ void eventoDaCasa(int jogador, int posJogador) {
 
       removeDinheiro(jogador, aluguelTotal);
       addDinheiro(proprietario, aluguelTotal);
-      
+
       esperarBotaoAvancar();
-    } else { // Jogador atual é o dono da propriedade
+    } else {
       tentarConstruir(jogador, posJogador);
     }
   } else if (precoCasa[posJogador] == 0 && !acaoDaCasaRealizadaOuTransferida) {
-    // Este bloco é para casas com precoCasa[posJogador] == 0 que NÃO foram tratadas
-    // no switch (ou seja, não definiram acaoDaCasaRealizadaOuTransferida = true ou não deram return).
-    // Com as mudanças, todas as casas com preço 0 estão no switch.
-    // Então, este bloco teoricamente não deveria ser alcançado.
-    // Mas é uma boa salvaguarda para uma "casa desconhecida" com preço 0.
     lcd.clear();
     lcd.setCursor(0,0); lcd.print("J" + String(jogador+1) + " em");
     lcd.setCursor(0,1); lcd.print(nomeDaCasaAtual.substring(0,19));
-    lcd.setCursor(0,2); lcd.print("Sem acao definida."); // Mensagem mais genérica
+    lcd.setCursor(0,2); lcd.print("Sem acao definida.");
     esperarBotaoAvancar();
   }
 }
-// ----- FIM DA FUNÇÃO eventoDaCasa MODIFICADA -----
 
 void setup() {
   Serial.begin(9600);
   lcd.init();
   lcd.backlight();
-  randomSeed(analogRead(A0)); 
+  randomSeed(analogRead(A0));
 
   pinMode(BOTAO_AVANCAR_NAO_COMPRAR, INPUT_PULLUP);
   pinMode(BOTAO_COMPRAR_SIM, INPUT_PULLUP);
+  pinMode(BOTAO_CONFIRMA_JOGADOR, INPUT_PULLUP);
+  pinMode(BOTAO_SELECIONA_JOGADOR, INPUT_PULLUP);
+
 
   for (int i = 0; i < numCasas; i++) {
     donoCasa[i] = -1;
@@ -603,42 +653,39 @@ void setup() {
   lcd.print("Super Banco LCD");
   lcd.setCursor(0,1);
   lcd.print("Aperte Avancar(P7)");
-  esperarBotaoAvancar(); 
+  esperarBotaoAvancar();
   lcd.clear();
 
   Serial.println("Jogo Iniciado!");
   Serial.println("Botao Pino7: Avancar/Nao.");
   Serial.println("Botao Pino8: Sim/Comprar/Construir.");
+  Serial.println("Botao Pino9: Confirmar Jogadores.");
+  Serial.println("Botao Pino12: Selecionar Jogadores.");
 }
 
 void loop() {
-  if (numJogadores == 0) { 
-    configurarJogadores();
+  if (numJogadores == 0) {
+    configurarJogadores(); 
     if(numJogadores == 0) { 
         lcd.clear();
         lcd.print("Erro: Jogadores?");
-        delay(2000); 
-        return; 
-    }
-    for(int i=0; i<numJogadores; ++i) {
-        posicaoJogador[i] = 0;
-        saldoJogador[i] = 1000;
-        preso[i] = false;
-        turnosPreso[i] = 0;
-        ativo[i] = true; 
+        delay(2000);
+        return;
     }
     for (int i = 0; i < numCasas; i++) { 
         donoCasa[i] = -1;
         numeroCasasConstruidas[i] = 0;
     }
-    jogadorAtual = 0; 
+    jogadorAtual = 0;
     lcd.clear();
     lcd.print("Novo Jogo!");
-    esperarBotaoAvancar();
+    lcd.setCursor(0,1);
+    lcd.print("J1 comeca.");
+    esperarBotaoAvancar(); 
   }
 
   if (verificarVencedor()) {
-    while (true) { 
+    while (true) {
         lcd.noBacklight(); delay(300);
         lcd.backlight(); delay(300);
     }
@@ -646,7 +693,7 @@ void loop() {
 
   if (!ativo[jogadorAtual]) {
     jogadorAtual = (jogadorAtual + 1) % numJogadores;
-    return; 
+    return;
   }
 
   lcd.clear();
@@ -655,15 +702,15 @@ void loop() {
     lcd.setCursor(0, 0);
     lcd.print("J");
     lcd.print(jogadorAtual + 1);
-    lcd.print(" PRESO na Jaula"); 
+    lcd.print(" PRESO na Jaula");
     lcd.setCursor(0, 1);
     lcd.print("Turnos restantes:");
     lcd.print(turnosPreso[jogadorAtual]);
     lcd.setCursor(0, 2);
     lcd.print("Saldo: R$");
     lcd.print(saldoJogador[jogadorAtual]);
-    
-    esperarBotaoAvancar(); 
+
+    esperarBotaoAvancar();
 
     turnosPreso[jogadorAtual]--;
     if (turnosPreso[jogadorAtual] <= 0) {
@@ -673,8 +720,22 @@ void loop() {
       lcd.print("J" + String(jogadorAtual+1) + " esta livre!");
       esperarBotaoAvancar();
     }
+    
+    // Mensagem de fim de turno do jogador preso
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Turno de J");
+    lcd.print(jogadorAtual + 1);
+    lcd.setCursor(0,1);
+    if(preso[jogadorAtual]){
+      lcd.print("Continua na Jaula");
+    } else {
+      lcd.print("Saiu da Jaula");
+    }
+    esperarBotaoAvancar();
+
     jogadorAtual = (jogadorAtual + 1) % numJogadores;
-    return; 
+    return;
   }
 
   lcd.setCursor(0,0);
@@ -687,9 +748,9 @@ void loop() {
   lcd.print("Pressione P7 para");
   lcd.setCursor(0,3);
   lcd.print("jogar o dado...");
-  esperarBotaoAvancar(); 
+  esperarBotaoAvancar();
 
-  int dado = random(1, 7); 
+  int dado = random(1, 7);
   int posAnterior = posicaoJogador[jogadorAtual];
   posicaoJogador[jogadorAtual] = (posicaoJogador[jogadorAtual] + dado) % numCasas;
 
@@ -706,7 +767,7 @@ void loop() {
   esperarBotaoAvancar();
 
   if (posAnterior + dado >= numCasas && posicaoJogador[jogadorAtual] != 0) { 
-    addDinheiro(jogadorAtual, 200); 
+    addDinheiro(jogadorAtual, 200);
     lcd.clear();
     lcd.setCursor(0,0);
     lcd.print("J" + String(jogadorAtual+1) + " passou");
@@ -716,10 +777,10 @@ void loop() {
     lcd.print("Recebeu +R$200");
     esperarBotaoAvancar();
   }
-  
+
   eventoDaCasa(jogadorAtual, posicaoJogador[jogadorAtual]);
-  
-  verificarStatusJogador(jogadorAtual); 
+
+  verificarStatusJogador(jogadorAtual);
 
   lcd.clear();
   lcd.setCursor(0, 0);
@@ -728,7 +789,7 @@ void loop() {
 
   lcd.setCursor(0, 1);
   String casaAtualStr = nomeCasa(posicaoJogador[jogadorAtual]);
-  lcd.print(casaAtualStr.substring(0, 19)); 
+  lcd.print(casaAtualStr.substring(0, 19));
 
   String s1="", s2="", s3="", s4="";
   if (numJogadores >=1 && ativo[0]) s1 = "J1:" + String(saldoJogador[0]); else if (numJogadores >=1) s1 = "J1: X ";
@@ -737,11 +798,11 @@ void loop() {
   if (numJogadores >=4 && ativo[3]) s4 = " J4:" + String(saldoJogador[3]); else if (numJogadores >=4) s4 = " J4: X ";
 
   lcd.setCursor(0, 2);
-  lcd.print(s1.substring(0,9) + s2.substring(0,10)); 
+  lcd.print(s1.substring(0,9) + s2.substring(0,10));
   lcd.setCursor(0, 3);
-  lcd.print(s3.substring(0,9) + s4.substring(0,10)); 
+  lcd.print(s3.substring(0,9) + s4.substring(0,10));
 
-  esperarBotaoAvancar(); 
+  esperarBotaoAvancar();
 
   jogadorAtual = (jogadorAtual + 1) % numJogadores;
 }
