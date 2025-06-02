@@ -1,1 +1,27 @@
-
+#define LED_PIN    3  // Pino do Arduino conectado à fita de LED
+#define LEDS_PER_HOUSE 3 // LEDs que acenderão por casa do tabuleiro
+const int numCasas = 24; // Total de casas no tabuleiro
+const int LED_COUNT = numCasas * LEDS_PER_HOUSE; // Total de LEDs necessários
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800); // Inicializa a fita de LED
+// ------------------------------------
+uint32_t coresJogadores[4]; // Array para cores dos jogadores
+// ----- FUNÇÃO PARA ATUALIZAR LEDS NeoPixel -----
+void mostrarTodasPosicoesJogadoresLed() {
+  strip.clear(); // Limpa a fita de LED
+  for (int j = 0; j < numJogadores; j++) {
+    if (ativo[j]) { // Verifica se o jogador está ativo
+      int casaIndex = posicaoJogador[j];
+      if (casaIndex < 0 || casaIndex >= numCasas) continue; // Verifica se a posição é válida
+      int startLedIndex = casaIndex * LEDS_PER_HOUSE; 
+      for (int i = 0; i < LEDS_PER_HOUSE; i++) {
+        int currentLed = startLedIndex + i;
+        if (currentLed < LED_COUNT) { 
+          strip.setPixelColor(currentLed, coresJogadores[j]); // Define a cor do LED
+        } else {
+          break; 
+        }
+      }
+    }
+  }
+  strip.show(); // Atualiza a fita de LED
+}
