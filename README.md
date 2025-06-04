@@ -1,134 +1,174 @@
-#🎲 Divercidade: Sobre o Jogo e Bibliotecas
+# 🎲 Divercidade
+
+**Divercidade** é um jogo de tabuleiro eletrônico baseado no clássico estilo de "jogos de propriedades", onde até 4 jogadores competem para acumular riquezas, comprar propriedades e sobreviver aos desafios do tabuleiro!
+
 ---
-✅ Resumo do Jogo
-🎯 Objetivo
-Acumular uma riqueza de R$3000
-ou
 
-Ser o último jogador ativo (não falido) no tabuleiro.
+## ✅ Resumo do Jogo
 
-👥 Jogadores
-De 1 a 4 jogadores.
+### 🎯 Objetivo
+- Acumular **R$3000** em saldo ou ser o **último jogador ativo** (não falido).
 
-Selecionáveis no início da partida por meio de botões.
+---
 
-📋 Tabuleiro
-Composto por 24 casas:
+## 👥 Jogadores
+- De **1 a 4 jogadores**.
+- Número de participantes selecionado por **botões físicos** no início da partida.
 
-Propriedades compráveis.
+---
 
-Casas de eventos: "Sorte ou Revés" e "Feriado".
+## 📋 Estrutura do Tabuleiro
+- **24 casas**:
+  - **Propriedades** compráveis.
+  - Casas de **eventos**: "Sorte ou Revés" e "Feriado".
+  - Casa especial: **"Jaula"** (prisão).
+  - Casa: **"Vá para Jaula"**.
 
-"Jaula" (prisão).
+---
 
-Casa "Vá para Jaula".
+## ⚙️ Mecânicas do Jogo
 
-⚙️ Mecânicas Principais
-🎲 Movimentação
-Jogadores rolam um dado virtual (valor aleatório de 1 a 6).
+### 🎲 Movimentação
+- Jogadores rolam um **dado virtual** (valor aleatório de 1 a 6).
+- Movimentam-se pelo tabuleiro conforme o valor sorteado.
 
-Movem-se pelo tabuleiro conforme o valor sorteado.
+---
 
-🏠 Propriedades
-Jogadores podem comprar propriedades livres.
+### 🏠 Propriedades
+- Propriedades podem ser **compradas** se estiverem livres.
+- Jogadores pagam **aluguel** ao caírem em propriedades alheias.
 
-Se caírem em propriedade de outro jogador, devem pagar aluguel.
+---
 
-🏗️ Construção
-Donos podem construir:
+### 🏗️ Construção
+- Proprietários podem construir:
+  - Até **3 "casinhas"**.
+  - Depois, uma **"mansão"**.
+- Construções aumentam o **valor do aluguel**.
 
-Até 3 "casinhas".
+---
 
-Depois, uma "mansão".
+### 💰 Saldo
+- Cada jogador começa com **R$1000**.
+- Passar pela casa **"Início"** concede **R$200**.
 
-Construções aumentam o valor do aluguel.
+---
 
-💰 Saldo
-Cada jogador começa com R$1000.
+### 🚨 Jaula
+- Jogadores podem ser enviados à **"Jaula"**:
+  - Perdem **1 turno**.
 
-Ao passar pelo "Início", recebe um bônus de R$200.
+---
 
-🚨 Jaula
-Jogadores podem ser enviados para a "Jaula":
+### 🎭 Sorte ou Revés
+- Casas que geram **eventos aleatórios**:
+  - Ganho ou perda financeira.
+  - Movimento extra.
+  - Ir para a Jaula.
 
-Ficam presos.
+---
 
-Perdem 1 turno.
+### 🎉 Feriado
+- Casa especial que concede um **bônus em dinheiro**.
 
-🎭 Sorte ou Revés
-Casas especiais que acionam eventos aleatórios:
+---
 
-Ganhos ou perdas financeiras.
+### 💥 Falência
+- Jogadores com saldo **negativo** são **eliminados**.
+- Suas **propriedades são liberadas**.
 
-Movimentação extra.
+---
 
-Ir para a Jaula.
+## 🔧 Interação com o Jogador
 
-🎉 Feriado
-Casa especial que concede um bônus em dinheiro.
+### 📺 Display
+- Utiliza um **LCD I2C 20x4** para exibir:
+  - Informações do jogo.
+  - Status dos jogadores.
+  - Mensagens de eventos e opções.
 
-💥 Falência
-Se o saldo ficar negativo:
+---
 
-O jogador é eliminado.
+### 🕹️ Botões
+| Função                                           | Pino |
+|--------------------------------------------------|------|
+| Avançar, não comprar/construir, confirmar        | 7    |
+| "Sim" (comprar/construir), confirmar seleção     | 9    |
+| Seleção do número de jogadores                   | 12   |
 
-Suas propriedades são liberadas.
+---
 
-🔧 Interação
-📺 Display
-Um LCD I2C 20x4 exibe:
+### 💡 Fita de LED (NeoPixel)
+- Conectada ao **Pino 3**.
+- Composta por **80 LEDs**:
+  - **3 LEDs por casa** do tabuleiro → totalizando 72.
+  - **8 LEDs extras** para efeitos especiais.
 
-Informações do jogo.
+#### ✨ Funções:
+- Indicação visual da **posição dos jogadores** por cor.
+- Efeitos visuais para:
+  - **Vitória**.
+  - **Sorte ou Revés**.
+  - **Compra ou construção**.
+- Ao alcançar a **última casa**, acendem-se os **3 LEDs da casa** e os **8 LEDs extras**.
 
-Status dos jogadores.
+---
 
-Eventos e opções.
+## 📚 Bibliotecas Utilizadas
 
-🕹️ Botões
-Função	Pino
-Avançar jogo / Não comprar ou construir	7
-Sim (comprar/construir) / Confirmar seleção	9
-Seleção do número de jogadores	12
+### 1️⃣ `Wire.h`
+- Comunicação via **I2C** com o **LCD**.
 
-💡 Fita de LED (NeoPixel)
-Conectada ao Pino 3.
+### 2️⃣ `LiquidCrystal_I2C.h`
+- Controle simplificado do **display LCD** I2C.
 
-80 LEDs no total:
+### 3️⃣ `Adafruit_NeoPixel.h`
+- Controle da **fita de LED RGB endereçável** para efeitos visuais dinâmicos.
 
-3 LEDs por casa do tabuleiro → 72 LEDs.
+---
 
-8 LEDs extras para efeitos especiais.
+## 🛠️ Componentes Eletrônicos
 
-✨ Funções da fita:
-Indicar a posição de cada jogador com sua cor.
+- **Arduino UNO** ou compatível.
+- **Display LCD 20x4 com módulo I2C**.
+- **Fita de LED NeoPixel** (80 LEDs).
+- **Botões táteis** (3 unidades).
+- **Resistores** para os botões.
+- **Fonte de alimentação** adequada para LEDs.
+- **Jumpers** e **protoboard** ou PCB.
 
-Quando um jogador atinge a última casa:
+---
 
-Acendem os 3 LEDs da casa e os 8 LEDs extras.
+## 🚀 Como Usar
 
-Efeitos visuais para:
+1. **Monte o circuito** conforme o esquema proposto.
+2. **Carregue o código** no Arduino via IDE.
+3. Selecione o número de jogadores.
+4. Divirta-se acumulando riquezas e superando os desafios!
 
-Vitória.
+---
 
-Sorte ou Revés.
+## 🏆 Créditos
+Desenvolvido como um projeto de integração de:
+- Programação em **Arduino**.
+- **Eletrônica** digital.
+- **Design de jogos** interativos.
 
-Compra.
+---
 
-Construção.
+## 📜 Licença
+Este projeto está licenciado sob a **MIT License**.
 
-📚 Bibliotecas Utilizadas
-1️⃣ Wire.h
-Comunicação via protocolo I2C.
+---
 
-Usada para interagir com o display LCD.
+## 📸 Imagens e Vídeos
+> _(Adicione aqui fotos ou vídeos do seu protótipo funcionando!)_
 
-2️⃣ LiquidCrystal_I2C.h
-Controle de displays LCD com módulo conversor I2C.
+---
 
-Simplifica a conexão e o controle do display.
+## 🤝 Contribuições
+Contribuições são bem-vindas!  
+Por favor, abra uma **issue** ou envie um **pull request**.
 
-3️⃣ Adafruit_NeoPixel.h
-Controle de fitas de LED RGB endereçáveis (ex.: WS2812B, SK6812).
-
-Permite criar efeitos de iluminação dinâmicos.
+---
 
