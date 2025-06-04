@@ -13,7 +13,7 @@
 
 ## 👥 Jogadores
 - De **1 a 4 jogadores**.
-- Número de participantes selecionado por **botões físicos** no início da partida.
+- Número de participantes selecionado e **confirmado com botões físicos** no início da partida.
 
 ---
 
@@ -90,11 +90,13 @@
 ---
 
 ### 🕹️ Botões
+
 | Função                                           | Pino |
 |--------------------------------------------------|------|
-| Avançar, não comprar/construir, confirmar        | 7    |
-| "Sim" (comprar/construir), confirmar seleção     | 9    |
+| Avançar, não comprar/construir                   | 7    |
+| "Sim" (comprar/construir)                        | 9    |
 | Seleção do número de jogadores                   | 12   |
+| Confirmação da quantidade de jogadores           | 8    |
 
 ---
 
@@ -132,7 +134,7 @@
 - **Arduino UNO** ou compatível.
 - **Display LCD 20x4 com módulo I2C**.
 - **Fita de LED NeoPixel** (80 LEDs).
-- **Botões táteis** (3 unidades).
+- **Botões táteis** (4 unidades).
 - **Resistores** para os botões.
 - **Fonte de alimentação** adequada para LEDs.
 - **Jumpers** e **protoboard** ou PCB.
@@ -143,8 +145,9 @@
 
 1. **Monte o circuito** conforme o esquema proposto.
 2. **Carregue o código** no Arduino via IDE.
-3. Selecione o número de jogadores.
-4. Divirta-se acumulando riquezas e superando os desafios!
+3. Selecione o número de jogadores usando os botões.
+4. Confirme a quantidade com o botão no **pino 8**.
+5. Divirta-se acumulando riquezas e superando os desafios!
 
 ---
 
