@@ -7,18 +7,14 @@
 // --- Configurações da Fita NeoPixel ---
 #define LED_PIN    3  // Pino do Arduino conectado à fita de LED
 #define LEDS_PER_HOUSE 3 // LEDs que acenderão por casa do tabuleiro
-const int numCasas = 24; // DECLARAÇÃO MOVIDA PARA CIMA
-const int LED_COUNT = numCasas * LEDS_PER_HOUSE; // Total de LEDs necessários (24 casas * 4 LEDs/casa = 96 LEDs)
+const int numCasas = 24;
+const int LED_COUNT = 80; // Máximo de LEDs na fita do usuário (24*3=72 para casas + 8 extras)
 
-// Parâmetro 1 = número de pixels na fita
-// Parâmetro 2 = pino do Arduino
-// Parâmetro 3 = flags de tipo de pixel (NEO_GRB + NEO_KHZ800 para a maioria das fitas WS2812B)
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 // ------------------------------------
 
 LiquidCrystal_I2C lcd(0x27, 20, 4); // LCD 20x4
 
-// const int numCasas = 24; // REMOVIDO DA POSIÇÃO ANTIGA, JÁ DECLARADO ACIMA
 int numJogadores = 0;
 int posicaoJogador[4] = {0, 0, 0, 0};
 int saldoJogador[4] = {1000, 1000, 1000, 1000};
@@ -27,15 +23,14 @@ int turnosPreso[4] = {0, 0, 0, 0};
 int jogadorAtual = 0;
 bool ativo[4] = {false, false, false, false};
 
-int numeroCasasConstruidas[numCasas]; // Agora 'numCasas' é conhecido aqui
-int donoCasa[numCasas];               // E aqui
+int numeroCasasConstruidas[numCasas];
+int donoCasa[numCasas];
 
 const int BOTAO_AVANCAR_NAO_COMPRAR = 7;
-const int BOTAO_COMPRAR_SIM = 8;
-const int BOTAO_CONFIRMA_JOGADOR = 9;
-const int BOTAO_SELECIONA_JOGADOR = 12;
+const int BOTAO_COMPRAR_SIM = 9;         // MODIFICADO: Pino 9 para Comprar/Sim e Confirmar Jogadores
+const int BOTAO_SELECIONA_JOGADOR = 12;   // Pino 12 para Selecionar Jogadores
+// A constante BOTAO_CONFIRMA_JOGADOR foi removida, BOTAO_COMPRAR_SIM (Pino 9) cobre sua função.
 
-// Array para cores dos jogadores (R, G, B)
 uint32_t coresJogadores[4];
 
 void configurarJogadores();
@@ -48,9 +43,9 @@ void eventoDaCasa(int jogador, int posNova);
 void verificarStatusJogador(int jogador);
 bool verificarVencedor();
 void esperarBotaoAvancar();
-void mostrarTodasPosicoesJogadoresLed(); // Nova função para LEDs
+void mostrarTodasPosicoesJogadoresLed();
 
-int precoCasa[numCasas] = { // Agora 'numCasas' é conhecido
+int precoCasa[numCasas] = {
   0, 100, 120, 140, 0, 150, 0, 160, 180, 200, 220, 240,
   0, 260, 280, 300, 320, 0, 0, 340, 360, 380, 400, 420
 };
@@ -113,54 +108,54 @@ void esperarBotaoAvancar() {
 void configurarJogadores() {
   int jogadoresCandidatos = 1;
   bool confirmado = false;
-  const long debounceDelay = 50; 
+  const long debounceDelay = 50;
 
   unsigned long lastDebounceTimeSelecao = 0;
-  bool lastRawStateSelecao = HIGH;         
-  bool acionamentoSelecaoFeito = false;    
+  bool lastRawStateSelecao = HIGH;
+  bool acionamentoSelecaoFeito = false;
 
   unsigned long lastDebounceTimeConfirmacao = 0;
-  bool lastRawStateConfirmacao = HIGH;     
-  bool lastSteadyStateConfirmacao = HIGH;  
+  bool lastRawStateConfirmacao = HIGH;
+  bool lastSteadyStateConfirmacao = HIGH;
 
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Num. Jogadores:");
   lcd.setCursor(0, 2);
-  lcd.print("P12:Muda / P9:OK");
+  lcd.print("BRANCO:Muda RED:OK  "); // P9 agora é para OK
 
   while (!confirmado) {
-    lcd.setCursor(8, 1); 
+    lcd.setCursor(8, 1);
     lcd.print(jogadoresCandidatos);
     lcd.print(" ");
 
-    bool currentRawStateSelecao = digitalRead(BOTAO_SELECIONA_JOGADOR);
+    bool currentRawStateSelecao = digitalRead(BOTAO_SELECIONA_JOGADOR); // Pino 12
     if (currentRawStateSelecao != lastRawStateSelecao) {
       lastDebounceTimeSelecao = millis();
     }
     if ((millis() - lastDebounceTimeSelecao) > debounceDelay) {
-      if (currentRawStateSelecao == LOW && !acionamentoSelecaoFeito) { 
+      if (currentRawStateSelecao == LOW && !acionamentoSelecaoFeito) {
         jogadoresCandidatos++;
         if (jogadoresCandidatos > 4) {
           jogadoresCandidatos = 1;
         }
         Serial.print("DEBUG_CFG: Pino 12 Pressionado. Jogadores candidatos: ");
         Serial.println(jogadoresCandidatos);
-        acionamentoSelecaoFeito = true; 
+        acionamentoSelecaoFeito = true;
       } else if (currentRawStateSelecao == HIGH) {
-        acionamentoSelecaoFeito = false; 
+        acionamentoSelecaoFeito = false;
       }
     }
-    lastRawStateSelecao = currentRawStateSelecao; 
+    lastRawStateSelecao = currentRawStateSelecao;
 
-    bool currentRawStateConfirmacao = digitalRead(BOTAO_CONFIRMA_JOGADOR);
+    bool currentRawStateConfirmacao = digitalRead(BOTAO_COMPRAR_SIM); // Pino 9 usado para confirmar
     if (currentRawStateConfirmacao != lastRawStateConfirmacao) {
       lastDebounceTimeConfirmacao = millis();
     }
     if ((millis() - lastDebounceTimeConfirmacao) > debounceDelay) {
       if (currentRawStateConfirmacao != lastSteadyStateConfirmacao && currentRawStateConfirmacao == LOW) {
         numJogadores = jogadoresCandidatos;
-        confirmado = true; 
+        confirmado = true;
         Serial.print("DEBUG_CFG: Pino 9 Pressionado. Jogadores confirmados: ");
         Serial.println(numJogadores);
       }
@@ -168,7 +163,7 @@ void configurarJogadores() {
     }
     lastRawStateConfirmacao = currentRawStateConfirmacao;
 
-    delay(20); 
+    delay(20);
   }
 
   for (int i = 0; i < numJogadores; i++) {
@@ -187,32 +182,44 @@ void configurarJogadores() {
   lcd.setCursor(0, 2);
   lcd.print("Confirmado!");
   lcd.setCursor(0, 3);
-  lcd.print("Avancar (P7)...");
+  lcd.print("Avancar(AMARELO)    ");
 
-  esperarBotaoAvancar(); 
+  esperarBotaoAvancar();
 }
 // ----- FIM DA FUNÇÃO configurarJogadores -----
 
-// ----- FUNÇÃO PARA ATUALIZAR LEDS NeoPixel -----
+// ----- FUNÇÃO PARA ATUALIZAR LEDS NeoPixel MODIFICADA -----
 void mostrarTodasPosicoesJogadoresLed() {
-  strip.clear(); 
+  strip.clear();
 
   for (int j = 0; j < numJogadores; j++) {
-    if (ativo[j]) { 
+    if (ativo[j]) {
       int casaIndex = posicaoJogador[j];
-      if (casaIndex < 0 || casaIndex >= numCasas) continue; 
-      int startLedIndex = casaIndex * LEDS_PER_HOUSE; 
+      if (casaIndex < 0 || casaIndex >= numCasas) continue;
+
+      int startLedIndex = casaIndex * LEDS_PER_HOUSE;
+
       for (int i = 0; i < LEDS_PER_HOUSE; i++) {
         int currentLed = startLedIndex + i;
-        if (currentLed < LED_COUNT) { 
+        if (currentLed < LED_COUNT) {
           strip.setPixelColor(currentLed, coresJogadores[j]);
         } else {
-          break; 
+          break;
         }
+      }
+
+      if (casaIndex == (numCasas - 1)) {
+        int ledsTabuleiro = numCasas * LEDS_PER_HOUSE;
+        for (int k = ledsTabuleiro; k < LED_COUNT; k++) {
+          strip.setPixelColor(k, coresJogadores[j]);
+        }
+        // Serial.print("DEBUG_LED: Jogador "); Serial.print(j+1);
+        // Serial.print(" na ultima casa! Acendendo LEDs extras de ");
+        // Serial.print(ledsTabuleiro); Serial.print(" a "); Serial.println(LED_COUNT-1);
       }
     }
   }
-  strip.show(); 
+  strip.show();
 }
 // ----- FIM DA FUNÇÃO NeoPixel -----
 
@@ -275,7 +282,7 @@ void verificarStatusJogador(int jogador) {
     Serial.print(jogador + 1);
     Serial.println(" foi eliminado por saldo negativo.");
     esperarBotaoAvancar();
-    mostrarTodasPosicoesJogadoresLed(); 
+    mostrarTodasPosicoesJogadoresLed();
   }
 }
 
@@ -292,13 +299,13 @@ bool verificarVencedor() {
         Serial.print("Jogador ");
         Serial.print(i + 1);
         Serial.println(" venceu com saldo >= 3000.");
-        for(int k=0; k<5; k++){ 
+        for(int k=0; k<5; k++){
             for(int l=0; l<LED_COUNT; l++) strip.setPixelColor(l, coresJogadores[i]);
             strip.show(); delay(200);
             strip.clear(); strip.show(); delay(200);
         }
-        for(int l=0; l<LED_COUNT; l++) strip.setPixelColor(l, coresJogadores[i]); 
-        strip.show(); 
+        for(int l=0; l<LED_COUNT; l++) strip.setPixelColor(l, coresJogadores[i]);
+        strip.show();
         esperarBotaoAvancar();
         return true;
     }
@@ -341,7 +348,6 @@ void eventoEspecial(int jogador) {
   textoEvento = "";
   textoEventoLinha2 = "";
   textoEventoLinha3 = "";
-
   switch (sorteio) {
     case 0: removeDinheiro(jogador, 200); textoEvento = "Reves:"; textoEventoLinha2 = "-200 R$"; break;
     case 1: removeDinheiro(jogador, 150); textoEvento = "Reves:"; textoEventoLinha2 = "-150 R$"; break;
@@ -349,13 +355,13 @@ void eventoEspecial(int jogador) {
     case 3: { int totalReceber = 0; for (int i = 0; i < numJogadores; i++) { if (i != jogador && ativo[i]) { removeDinheiro(i, 80); verificarStatusJogador(i); totalReceber += 80; } } addDinheiro(jogador, totalReceber); textoEvento = "Sorte:"; textoEventoLinha2 = "Outros te pagam"; textoEventoLinha3 = "80 R$ cada"; break; }
     case 4: addDinheiro(jogador, 650); textoEvento = "Sorte:"; textoEventoLinha2 = "Recebe +650 R$"; break;
     case 5: removeDinheiro(jogador, 200); textoEvento = "Reves:"; textoEventoLinha2 = "-200 R$"; break;
-    case 6: 
+    case 6:
       preso[jogador] = true;
-      turnosPreso[jogador] = 1; 
+      turnosPreso[jogador] = 1;
       posicaoJogador[jogador] = 18;
       textoEvento = "Reves:";
       textoEventoLinha2 = "Va para Jaula!";
-      textoEventoLinha3 = "(Pos.18) 1 turno"; 
+      textoEventoLinha3 = "(Pos.18) 1 turno";
       break;
     case 7: removeDinheiro(jogador, 550); textoEvento = "Reves:"; textoEventoLinha2 = "-550 R$"; break;
     case 8: addDinheiro(jogador, 1000); textoEvento = "Sorte:"; textoEventoLinha2 = "Ganha +1000 R$"; break;
@@ -381,16 +387,16 @@ void mostrarEventoEspecial() {
   lcd.print(textoEventoLinha2);
   lcd.setCursor(0, 2);
   lcd.print(textoEventoLinha3);
-  uint32_t corEvento = strip.Color(255,165,0); 
-  if(textoEvento.startsWith("Reves")) corEvento = strip.Color(100,0,0); 
-  else if (textoEvento.startsWith("Sorte")) corEvento = strip.Color(0,100,0); 
-  
+  uint32_t corEvento = strip.Color(255,165,0);
+  if(textoEvento.startsWith("Reves")) corEvento = strip.Color(100,0,0);
+  else if (textoEvento.startsWith("Sorte")) corEvento = strip.Color(0,100,0);
+
   for(int k=0; k<3; k++){
       for(int l=0; l<LED_COUNT; l+=2) strip.setPixelColor(l, corEvento);
       strip.show(); delay(150);
       strip.clear(); strip.show(); delay(150);
   }
-  mostrarTodasPosicoesJogadoresLed(); 
+  mostrarTodasPosicoesJogadoresLed();
   esperarBotaoAvancar();
 }
 
@@ -403,28 +409,23 @@ bool perguntarCompra(int jogador, int casa) {
   lcd.setCursor(0, 1);
   String nome = nomeCasa(casa);
   lcd.print(nome.substring(0, 19));
-
   lcd.setCursor(0, 2);
   lcd.print("Preco: R$");
   lcd.print(precoCasa[casa]);
-
   lcd.setCursor(0, 3);
-  lcd.print("Sim(P8) Nao(P7)   ");
-
+  lcd.print("S(RED) N(AMARELO)   "); // MODIFICADO TEXTO (P8 -> P9)
   Serial.println("Jogador " + String(jogador + 1) + " em " + nomeCasa(casa) + ", preco R$" + String(precoCasa[casa]) + ".");
-  Serial.println("Comprar? (Botao Pino8=SIM, Botao Pino7=NAO)");
-
+  Serial.println("Comprar? (Botao Pino9=SIM, Botao Pino7=NAO)"); // MODIFICADO TEXTO (P8 -> P9)
   unsigned long startDebounceSim = 0;
   bool buttonStateSim = HIGH;
   bool lastButtonStateSim = HIGH;
-
   unsigned long startDebounceNao = 0;
   bool buttonStateNao = HIGH;
   bool lastButtonStateNao = HIGH;
 
   while (true) {
     lastButtonStateSim = buttonStateSim;
-    buttonStateSim = digitalRead(BOTAO_COMPRAR_SIM);
+    buttonStateSim = digitalRead(BOTAO_COMPRAR_SIM); // BOTAO_COMPRAR_SIM é Pino 9
     if (lastButtonStateSim == HIGH && buttonStateSim == LOW) startDebounceSim = millis();
     if (lastButtonStateSim == LOW && buttonStateSim == HIGH && (millis() - startDebounceSim) > 50) {
         if (saldoJogador[jogador] >= precoCasa[casa]) {
@@ -438,7 +439,7 @@ bool perguntarCompra(int jogador, int casa) {
             lcd.print(nome.substring(0,19));
             for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(casa*LEDS_PER_HOUSE + i, coresJogadores[jogador]);
             strip.show();
-            delay(500); 
+            delay(500);
             esperarBotaoAvancar();
             return true;
         } else {
@@ -449,7 +450,6 @@ bool perguntarCompra(int jogador, int casa) {
             return false;
         }
     }
-
     lastButtonStateNao = buttonStateNao;
     buttonStateNao = digitalRead(BOTAO_AVANCAR_NAO_COMPRAR);
     if (lastButtonStateNao == HIGH && buttonStateNao == LOW) startDebounceNao = millis();
@@ -475,7 +475,6 @@ void tentarConstruir(int jogador, int casa) {
     esperarBotaoAvancar();
     return;
   }
-
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("J");
@@ -484,34 +483,28 @@ void tentarConstruir(int jogador, int casa) {
   lcd.setCursor(0, 1);
   String nome = nomeCasa(casa);
   lcd.print(nome.substring(0, 19));
-
   lcd.setCursor(0, 2);
   if (numeroCasasConstruidas[casa] < 3)
     lcd.print("Casinha ");
   else
     lcd.print("Mansao ");
   lcd.print("40R$?");
-
   lcd.setCursor(0, 3);
-  lcd.print("Sim(P8) Nao(P7)   ");
-
+  lcd.print("S(RED) N(AMARELO)   "); // MODIFICADO TEXTO (P8 -> P9)
   Serial.println("Jogador " + String(jogador + 1) + " pode construir em " + nomeCasa(casa) + ".");
-  Serial.println("Preco: 40 R$. (Botao Pino8=SIM, Botao Pino7=NAO)");
-
+  Serial.println("Preco: 40 R$. (Botao Pino9=SIM, Botao Pino7=NAO)"); // MODIFICADO TEXTO (P8 -> P9)
   unsigned long tempoInicial = millis();
   bool respostaDada = false;
-
   unsigned long startDebounceSim = 0;
   bool buttonStateSim = HIGH;
   bool lastButtonStateSim = HIGH;
-
   unsigned long startDebounceNao = 0;
   bool buttonStateNao = HIGH;
   bool lastButtonStateNao = HIGH;
 
   while (((millis() - tempoInicial) < 15000) && !respostaDada) {
     lastButtonStateSim = buttonStateSim;
-    buttonStateSim = digitalRead(BOTAO_COMPRAR_SIM);
+    buttonStateSim = digitalRead(BOTAO_COMPRAR_SIM); // BOTAO_COMPRAR_SIM é Pino 9
     if (lastButtonStateSim == HIGH && buttonStateSim == LOW) startDebounceSim = millis();
     if (lastButtonStateSim == LOW && buttonStateSim == HIGH && (millis() - startDebounceSim) > 50) {
         respostaDada = true;
@@ -526,16 +519,14 @@ void tentarConstruir(int jogador, int casa) {
               lcd.print(String(numeroCasasConstruidas[casa]) + " casinha(s)");
             else
               lcd.print("Mansao pronta!");
-            uint32_t corOriginal = strip.getPixelColor(casa*LEDS_PER_HOUSE); 
             for(int k=0; k<3; k++){
                 for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(casa*LEDS_PER_HOUSE + i, coresJogadores[jogador]);
                 strip.show(); delay(150);
-                 for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(casa*LEDS_PER_HOUSE + i, strip.Color(0,0,0)); 
+                 for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(casa*LEDS_PER_HOUSE + i, strip.Color(0,0,0));
                 strip.show(); delay(150);
             }
             for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(casa*LEDS_PER_HOUSE + i, coresJogadores[jogador]);
             strip.show();
-
             esperarBotaoAvancar();
             return;
         } else {
@@ -546,7 +537,6 @@ void tentarConstruir(int jogador, int casa) {
             return;
         }
     }
-
     lastButtonStateNao = buttonStateNao;
     buttonStateNao = digitalRead(BOTAO_AVANCAR_NAO_COMPRAR);
     if (lastButtonStateNao == HIGH && buttonStateNao == LOW) startDebounceNao = millis();
@@ -560,7 +550,6 @@ void tentarConstruir(int jogador, int casa) {
     }
     delay(10);
   }
-
   if (!respostaDada) {
     lcd.clear();
     lcd.setCursor(0, 0);
@@ -574,18 +563,15 @@ void tentarConstruir(int jogador, int casa) {
 void eventoDaCasa(int jogador, int posJogador) {
   String nomeDaCasaAtual = nomeCasa(posJogador);
   bool acaoDaCasaRealizadaOuTransferida = false;
-
   textoEvento = "";
   textoEventoLinha2 = "";
   textoEventoLinha3 = "";
-
   switch (posJogador) {
     case 0:
       textoEvento = "J" + String(jogador + 1) + " no Inicio";
       textoEventoLinha2 = "Bem-vindo de volta!";
       acaoDaCasaRealizadaOuTransferida = true;
       break;
-
     case 4: case 17:
       lcd.clear();
       lcd.setCursor(0,0);
@@ -594,22 +580,19 @@ void eventoDaCasa(int jogador, int posJogador) {
       lcd.print(nomeDaCasaAtual.substring(0,19));
       esperarBotaoAvancar();
       eventoEspecial(jogador);
-      mostrarEventoEspecial(); 
+      mostrarEventoEspecial();
       return;
-
-    case 6: 
+    case 6:
       lcd.clear();
       lcd.setCursor(0,0); lcd.print("J" + String(jogador+1));
       lcd.setCursor(0,1); lcd.print("VAI PARA JAULA!");
       preso[jogador] = true;
-      turnosPreso[jogador] = 1; 
+      turnosPreso[jogador] = 1;
       posicaoJogador[jogador] = 18;
-      lcd.setCursor(0,2); lcd.print("(Pos.18) 1 turno"); 
-      // A chamada para mostrarTodasPosicoesJogadoresLed() será feita no loop principal após eventoDaCasa
+      lcd.setCursor(0,2); lcd.print("(Pos.18) 1 turno");
       esperarBotaoAvancar();
       return;
-
-    case 18: 
+    case 18:
       if (!preso[jogador]) {
         textoEvento = "J" + String(jogador + 1);
         textoEventoLinha2 = "Visitando Jaula";
@@ -621,27 +604,20 @@ void eventoDaCasa(int jogador, int posJogador) {
       }
       acaoDaCasaRealizadaOuTransferida = true;
       break;
-
-    case 12: 
+    case 12:
         textoEvento = "J" + String(jogador + 1) + " em Feriado";
         textoEventoLinha2 = "Dia de Sorte!";
         addDinheiro(jogador, 100);
         textoEventoLinha3 = "Ganhou R$100";
         acaoDaCasaRealizadaOuTransferida = true;
-        
-        uint32_t corFeriadoOriginal[LEDS_PER_HOUSE];
-        for(int i=0; i<LEDS_PER_HOUSE; i++) corFeriadoOriginal[i] = strip.getPixelColor(posJogador*LEDS_PER_HOUSE + i);
-
         for(int k=0; k<3; k++){
-            for(int l=0; l<LEDS_PER_HOUSE; l++) strip.setPixelColor(posJogador*LEDS_PER_HOUSE + l, strip.Color(255,223,0)); 
+            for(int l=0; l<LEDS_PER_HOUSE; l++) strip.setPixelColor(posJogador*LEDS_PER_HOUSE + l, strip.Color(255,223,0));
             strip.show(); delay(150);
-            for(int l=0; l<LEDS_PER_HOUSE; l++) strip.setPixelColor(posJogador*LEDS_PER_HOUSE + l, strip.Color(0,0,0)); 
-            strip.show(); delay(150); 
+            for(int l=0; l<LEDS_PER_HOUSE; l++) strip.setPixelColor(posJogador*LEDS_PER_HOUSE + l, strip.Color(0,0,0));
+            strip.show(); delay(150);
         }
-        // A chamada para mostrarTodasPosicoesJogadoresLed() no loop principal restaurará as cores corretas.
         break;
   }
-
   if (acaoDaCasaRealizadaOuTransferida) {
     lcd.clear();
     lcd.setCursor(0,0); lcd.print(textoEvento);
@@ -656,9 +632,7 @@ void eventoDaCasa(int jogador, int posJogador) {
       int casasConst = numeroCasasConstruidas[posJogador];
       int precoDaPropriedade = precoCasa[posJogador];
       float aluguelCalculado = 0.0f;
-
       aluguelCalculado = (float)precoDaPropriedade * 0.20f;
-
       if (casasConst == 1) {
           aluguelCalculado += (float)precoDaPropriedade * 0.05f;
       } else if (casasConst == 2) {
@@ -670,37 +644,26 @@ void eventoDaCasa(int jogador, int posJogador) {
           aluguelCalculado += (float)precoDaPropriedade * 0.20f;
           aluguelCalculado += (float)precoDaPropriedade * 0.10f;
       }
-
       int aluguelTotal = static_cast<int>(aluguelCalculado);
-      
       if (precoDaPropriedade > 0 && aluguelTotal == 0 && aluguelCalculado > 0.0f) {
           aluguelTotal = 1;
       }
-
       textoEvento = "J" + String(jogador + 1) + " paga";
       textoEventoLinha2 = "Aluguel R$" + String(aluguelTotal);
       textoEventoLinha3 = "Para J" + String(proprietario + 1);
-
       lcd.clear();
       lcd.setCursor(0,0); lcd.print(textoEvento);
       lcd.setCursor(0,1); lcd.print(textoEventoLinha2);
       lcd.setCursor(0,2); lcd.print(textoEventoLinha3);
-
-      uint32_t corPagamento = strip.Color(255,0,0); 
-      uint32_t coresOriginaisPagamento[LEDS_PER_HOUSE];
-      for(int i=0; i<LEDS_PER_HOUSE; i++) coresOriginaisPagamento[i] = strip.getPixelColor(posJogador*LEDS_PER_HOUSE + i);
-
+      uint32_t corPagamento = strip.Color(255,0,0);
       for(int k=0; k<2; k++){
           for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(posJogador*LEDS_PER_HOUSE + i, corPagamento);
           strip.show(); delay(200);
            for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(posJogador*LEDS_PER_HOUSE + i, strip.Color(0,0,0));
           strip.show(); delay(200);
       }
-      // A chamada para mostrarTodasPosicoesJogadoresLed() no loop principal restaurará.
-
       removeDinheiro(jogador, aluguelTotal);
       addDinheiro(proprietario, aluguelTotal);
-
       esperarBotaoAvancar();
     } else {
       tentarConstruir(jogador, posJogador);
@@ -720,52 +683,46 @@ void setup() {
   lcd.backlight();
   randomSeed(analogRead(A0));
 
-  pinMode(BOTAO_AVANCAR_NAO_COMPRAR, INPUT_PULLUP);
-  pinMode(BOTAO_COMPRAR_SIM, INPUT_PULLUP);
-  pinMode(BOTAO_CONFIRMA_JOGADOR, INPUT_PULLUP);
-  pinMode(BOTAO_SELECIONA_JOGADOR, INPUT_PULLUP);
+  pinMode(BOTAO_AVANCAR_NAO_COMPRAR, INPUT_PULLUP); // Pino 7
+  pinMode(BOTAO_COMPRAR_SIM, INPUT_PULLUP);         // Pino 9 (era 8)
+  pinMode(BOTAO_SELECIONA_JOGADOR, INPUT_PULLUP);   // Pino 12 (reativado para configurar jogadores)
+  // pinMode para BOTAO_CONFIRMA_JOGADOR não é mais necessário separadamente, pois BOTAO_COMPRAR_SIM (Pino 9) cobre isso.
 
   strip.begin();
-  strip.setBrightness(50); 
-  strip.clear();           
+  strip.setBrightness(50);
+  strip.clear();
   strip.show();
-
-  coresJogadores[0] = strip.Color(255, 0, 0);   
-  coresJogadores[1] = strip.Color(0, 255, 0);   
-  coresJogadores[2] = strip.Color(0, 0, 255);   
-  coresJogadores[3] = strip.Color(255, 255, 0); 
-
-
+  coresJogadores[0] = strip.Color(255, 0, 0);
+  coresJogadores[1] = strip.Color(0, 255, 0);
+  coresJogadores[2] = strip.Color(0, 0, 255);
+  coresJogadores[3] = strip.Color(255, 255, 0);
   for (int i = 0; i < numCasas; i++) {
     donoCasa[i] = -1;
     numeroCasasConstruidas[i] = 0;
   }
-
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Super Banco LCD");
+  lcd.print("DIVERCIDADE");
   lcd.setCursor(0,1);
-  lcd.print("Aperte Avancar(P7)");
+  lcd.print("Avancar(AMARELO");
   esperarBotaoAvancar();
   lcd.clear();
-
   Serial.println("Jogo Iniciado!");
   Serial.println("Botao Pino7: Avancar/Nao.");
-  Serial.println("Botao Pino8: Sim/Comprar/Construir.");
-  Serial.println("Botao Pino9: Confirmar Jogadores.");
+  Serial.println("Botao Pino9: Sim/Comprar/Confirmar Jogadores."); // MODIFICADO TEXTO
   Serial.println("Botao Pino12: Selecionar Jogadores.");
 }
 
 void loop() {
-  if (numJogadores == 0) {
-    configurarJogadores(); 
-    if(numJogadores == 0) { 
+  if (numJogadores == 0) { // Agora o número de jogadores será selecionado
+    configurarJogadores();
+    if(numJogadores == 0) { // Salvaguarda caso a configuração não defina jogadores
         lcd.clear();
         lcd.print("Erro: Jogadores?");
         delay(2000);
         return;
     }
-    for (int i = 0; i < numCasas; i++) { 
+    for (int i = 0; i < numCasas; i++) {
         donoCasa[i] = -1;
         numeroCasasConstruidas[i] = 0;
     }
@@ -773,25 +730,21 @@ void loop() {
     lcd.clear();
     lcd.print("Novo Jogo!");
     lcd.setCursor(0,1);
-    lcd.print("J1 comeca.");
-    mostrarTodasPosicoesJogadoresLed(); 
-    esperarBotaoAvancar(); 
+    lcd.print(String(numJogadores) + " Jogadores - J1 "); // Mostra o número de jogadores selecionado
+    mostrarTodasPosicoesJogadoresLed();
+    esperarBotaoAvancar();
   }
-
-  if (verificarVencedor()) { 
-    while (true) { 
+  if (verificarVencedor()) {
+    while (true) {
         lcd.noBacklight(); delay(300);
         lcd.backlight(); delay(300);
     }
   }
-
   if (!ativo[jogadorAtual]) {
     jogadorAtual = (jogadorAtual + 1) % numJogadores;
     return;
   }
-
   lcd.clear();
-
   if (preso[jogadorAtual]) {
     lcd.setCursor(0, 0);
     lcd.print("J");
@@ -799,30 +752,25 @@ void loop() {
     lcd.print(" PRESO na Jaula");
     lcd.setCursor(0, 1);
     lcd.print("Turnos restantes:");
-    lcd.print(turnosPreso[jogadorAtual]); 
+    lcd.print(turnosPreso[jogadorAtual]);
     lcd.setCursor(0, 2);
     lcd.print("Saldo: R$");
     lcd.print(saldoJogador[jogadorAtual]);
-
-    mostrarTodasPosicoesJogadoresLed(); 
-    esperarBotaoAvancar(); 
-
-    turnosPreso[jogadorAtual]--; 
-    if (turnosPreso[jogadorAtual] <= 0) { 
-      preso[jogadorAtual] = false; 
+    mostrarTodasPosicoesJogadoresLed();
+    esperarBotaoAvancar();
+    turnosPreso[jogadorAtual]--;
+    if (turnosPreso[jogadorAtual] <= 0) {
+      preso[jogadorAtual] = false;
       lcd.clear();
       lcd.setCursor(0,0);
       lcd.print("J" + String(jogadorAtual+1) + " esta livre!");
       lcd.setCursor(0,1);
-      lcd.print("Jogara no prox."); 
+      lcd.print("Jogara no prox.");
       esperarBotaoAvancar();
-    } 
-    // Não precisa de 'else' aqui, pois a mensagem de fim de turno já foi removida de dentro deste if
-    
-    jogadorAtual = (jogadorAtual + 1) % numJogadores; 
-    return; 
+    }
+    jogadorAtual = (jogadorAtual + 1) % numJogadores;
+    return;
   }
-
   lcd.setCursor(0,0);
   lcd.print("Vez de J");
   lcd.print(jogadorAtual + 1);
@@ -830,17 +778,14 @@ void loop() {
   lcd.print("Saldo: R$");
   lcd.print(saldoJogador[jogadorAtual]);
   lcd.setCursor(0,2);
-  lcd.print("Pressione P7 para");
+  lcd.print("AMARELO avança ");
   lcd.setCursor(0,3);
   lcd.print("jogar o dado...");
-  
-  mostrarTodasPosicoesJogadoresLed(); 
+  mostrarTodasPosicoesJogadoresLed();
   esperarBotaoAvancar();
-
   int dado = random(1, 7);
-  int posAnteriorNoTabuleiro = posicaoJogador[jogadorAtual]; 
+  int posAnteriorNoTabuleiro = posicaoJogador[jogadorAtual];
   posicaoJogador[jogadorAtual] = (posicaoJogador[jogadorAtual] + dado) % numCasas;
-
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("J");
@@ -851,11 +796,8 @@ void loop() {
   lcd.print("Foi para:");
   lcd.setCursor(0,2);
   lcd.print(nomeCasa(posicaoJogador[jogadorAtual]).substring(0,19));
-  
-  // mostrarTodasPosicoesJogadoresLed(); // Movido para após evento da casa
   esperarBotaoAvancar();
-
-  if (posAnteriorNoTabuleiro + dado >= numCasas && posicaoJogador[jogadorAtual] != 0) { 
+  if (posAnteriorNoTabuleiro + dado >= numCasas && posicaoJogador[jogadorAtual] != 0) {
     addDinheiro(jogadorAtual, 200);
     lcd.clear();
     lcd.setCursor(0,0);
@@ -864,46 +806,34 @@ void loop() {
     lcd.print("pelo INICIO!");
     lcd.setCursor(0,2);
     lcd.print("Recebeu +R$200");
-    
-    uint32_t corInicioOriginal[LEDS_PER_HOUSE];
-    for(int i=0; i<LEDS_PER_HOUSE; i++) corInicioOriginal[i] = strip.getPixelColor(0*LEDS_PER_HOUSE + i);
-    uint32_t corInicio = strip.Color(200,200,200); 
-    for(int k=0; k<2; k++){ // Pisca mais rápido
-        for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(0*LEDS_PER_HOUSE + i, corInicio); 
+    uint32_t corInicio = strip.Color(200,200,200);
+    for(int k=0; k<2; k++){ 
+        for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(0*LEDS_PER_HOUSE + i, corInicio);
         strip.show(); delay(100);
-        for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(0*LEDS_PER_HOUSE + i, strip.Color(0,0,0)); // Apaga
+        for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(0*LEDS_PER_HOUSE + i, strip.Color(0,0,0)); 
         strip.show(); delay(100);
     }
-    // A chamada para mostrarTodasPosicoesJogadoresLed() no final do turno restaurará o estado correto.
     esperarBotaoAvancar();
   }
-
-  eventoDaCasa(jogadorAtual, posicaoJogador[jogadorAtual]); 
-  
-  mostrarTodasPosicoesJogadoresLed(); 
-  verificarStatusJogador(jogadorAtual); 
-
+  eventoDaCasa(jogadorAtual, posicaoJogador[jogadorAtual]);
+  mostrarTodasPosicoesJogadoresLed();
+  verificarStatusJogador(jogadorAtual);
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Fim do turno: J");
   lcd.print(jogadorAtual + 1);
-
   lcd.setCursor(0, 1);
   String casaAtualStr = nomeCasa(posicaoJogador[jogadorAtual]);
   lcd.print(casaAtualStr.substring(0, 19));
-
   String s1="", s2="", s3="", s4="";
   if (numJogadores >=1 && ativo[0]) s1 = "J1:" + String(saldoJogador[0]); else if (numJogadores >=1) s1 = "J1: X ";
   if (numJogadores >=2 && ativo[1]) s2 = " J2:" + String(saldoJogador[1]); else if (numJogadores >=2) s2 = " J2: X ";
   if (numJogadores >=3 && ativo[2]) s3 = "J3:" + String(saldoJogador[2]); else if (numJogadores >=3) s3 = "J3: X ";
   if (numJogadores >=4 && ativo[3]) s4 = " J4:" + String(saldoJogador[3]); else if (numJogadores >=4) s4 = " J4: X ";
-
   lcd.setCursor(0, 2);
   lcd.print(s1.substring(0,9) + s2.substring(0,10));
   lcd.setCursor(0, 3);
   lcd.print(s3.substring(0,9) + s4.substring(0,10));
-
   esperarBotaoAvancar();
-
-  jogadorAtual = (jogadorAtual + 1) % numJogadores;
+  jogadorAtual = (jogadorAtual + 1) % numJogadores; // CORRIGIDO: jogadoro bAtual -> jogadorAtual
 }
