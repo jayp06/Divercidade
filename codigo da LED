@@ -1,27 +1,235 @@
+// No início do seu arquivo .ino (geralmente após os #include de Wire e LiquidCrystal_I2C):
+#include <Adafruit_NeoPixel.h> // Adiciona a biblioteca NeoPixel
+
+// --- Configurações da Fita NeoPixel ---
 #define LED_PIN    3  // Pino do Arduino conectado à fita de LED
 #define LEDS_PER_HOUSE 3 // LEDs que acenderão por casa do tabuleiro
-const int numCasas = 24; // Total de casas no tabuleiro
-const int LED_COUNT = numCasas * LEDS_PER_HOUSE; // Total de LEDs necessários
-Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800); // Inicializa a fita de LED
+// const int numCasas = 24; // Esta constante é definida globalmente no seu código
+const int LED_COUNT = 80; // Máximo de LEDs na fita do usuário (24*3=72 para casas + 8 extras)
+
+// Parâmetro 1 = número de pixels na fita
+// Parâmetro 2 = pino do Arduino
+// Parâmetro 3 = flags de tipo de pixel (NEO_GRB + NEO_KHZ800 para a maioria das fitas WS2812B)
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 // ------------------------------------
-uint32_t coresJogadores[4]; // Array para cores dos jogadores
-// ----- FUNÇÃO PARA ATUALIZAR LEDS NeoPixel -----
+
+// ... (outras declarações de variáveis globais) ...
+
+// Array para cores dos jogadores (R, G, B) - Declarado globalmente
+uint32_t coresJogadores[4];
+
+// Protótipo da função para LEDs (se a definição completa vier depois do primeiro uso)
+void mostrarTodasPosicoesJogadoresLed();
+
+
+// Dentro da função setup():
+void setup() {
+  // ... (Serial.begin, lcd.init, pinMode para botões, etc.) ...
+
+  strip.begin();           // Inicializa a biblioteca NeoPixel
+  strip.setBrightness(50); // Ajuste conforme necessário (0-255). Cuidado com o consumo de energia!
+  strip.clear();           // Garante que todos os LEDs estão apagados no início
+  strip.show();            // Aplica o clear (envia o estado para a fita)
+
+  // Define as cores dos jogadores
+  coresJogadores[0] = strip.Color(255, 0, 0);   // Jogador 1: Vermelho
+  coresJogadores[1] = strip.Color(0, 255, 0);   // Jogador 2: Verde
+  coresJogadores[2] = strip.Color(0, 0, 255);   // Jogador 3: Azul
+  coresJogadores[3] = strip.Color(255, 255, 0); // Jogador 4: Amarelo
+
+  // ... (resto do seu setup: inicialização de donoCasa, mensagem de boas-vindas no LCD, etc.) ...
+}
+
+// Função completa para atualizar os LEDs NeoPixel com as posições dos jogadores
 void mostrarTodasPosicoesJogadoresLed() {
-  strip.clear(); // Limpa a fita de LED
+  strip.clear(); // Apaga todos os LEDs na fita (até LED_COUNT-1)
+
   for (int j = 0; j < numJogadores; j++) {
-    if (ativo[j]) { // Verifica se o jogador está ativo
+    if (ativo[j]) { // Somente para jogadores ativos
       int casaIndex = posicaoJogador[j];
-      if (casaIndex < 0 || casaIndex >= numCasas) continue; // Verifica se a posição é válida
-      int startLedIndex = casaIndex * LEDS_PER_HOUSE; 
+
+      // Valida se o índice da casa é válido
+      if (casaIndex < 0 || casaIndex >= numCasas) continue;
+
+      int startLedIndex = casaIndex * LEDS_PER_HOUSE; // Calcula o primeiro LED para esta casa
+
+      // Acende LEDS_PER_HOUSE para esta casa com a cor do jogador
       for (int i = 0; i < LEDS_PER_HOUSE; i++) {
         int currentLed = startLedIndex + i;
-        if (currentLed < LED_COUNT) { 
-          strip.setPixelColor(currentLed, coresJogadores[j]); // Define a cor do LED
+        if (currentLed < LED_COUNT) { // Verifica se o LED da casa está dentro do alcance da fita
+          strip.setPixelColor(currentLed, coresJogadores[j]);
         } else {
-          break; 
+          break; // Sai do loop se exceder o número de LEDs na fita
         }
+      }
+
+      // Se o jogador está na última casa (índice numCasas - 1, ou seja, 23)
+      if (casaIndex == (numCasas - 1)) {
+        int ledsTabuleiro = numCasas * LEDS_PER_HOUSE; // LEDs usados pelas casas (72)
+        // Acende os LEDs extras do (ledsTabuleiro) ao (LED_COUNT-1)
+        for (int k = ledsTabuleiro; k < LED_COUNT; k++) {
+          strip.setPixelColor(k, coresJogadores[j]); // Acende na cor do jogador
+        }
+        // Opcional: Debug para LEDs extras
+        // Serial.print("DEBUG_LED: Jogador "); Serial.print(j+1);
+        // Serial.print(" na ultima casa! Acendendo LEDs extras de ");
+        // Serial.print(ledsTabuleiro); Serial.print(" a "); Serial.println(LED_COUNT-1);
       }
     }
   }
-  strip.show(); // Atualiza a fita de LED
+  strip.show(); // Atualiza a fita de LED para mostrar as mudanças
 }
+
+// Trechos de LED dentro de outras funções:
+
+// Dentro da função verificarStatusJogador(int jogador):
+// (Quando um jogador é eliminado)
+// ... (código de eliminação) ...
+//   esperarBotaoAvancar();
+    mostrarTodasPosicoesJogadoresLed(); // Atualiza LEDs para remover a cor do jogador eliminado
+// ...
+
+// Dentro da função verificarVencedor():
+// (Efeito de LED para vitória - para riqueza >= 3000)
+// ... (código de anúncio de vitória) ...
+//        Serial.println(" venceu com saldo >= 3000.");
+        for(int k=0; k<5; k++){
+            for(int l=0; l<LED_COUNT; l++) strip.setPixelColor(l, coresJogadores[i]);
+            strip.show(); delay(200);
+            strip.clear(); strip.show(); delay(200);
+        }
+        for(int l=0; l<LED_COUNT; l++) strip.setPixelColor(l, coresJogadores[i]);
+        strip.show();
+//        esperarBotaoAvancar();
+// ...
+// (Efeito de LED para vitória - último de pé)
+// ... (código de anúncio de vitória) ...
+//    Serial.println(" venceu por ser o ultimo ativo.");
+    for(int k=0; k<5; k++){
+        for(int l=0; l<LED_COUNT; l++) strip.setPixelColor(l, coresJogadores[ultimoAtivo]);
+        strip.show(); delay(200);
+        strip.clear(); strip.show(); delay(200);
+    }
+    for(int l=0; l<LED_COUNT; l++) strip.setPixelColor(l, coresJogadores[ultimoAtivo]);
+    strip.show();
+//    esperarBotaoAvancar();
+// ...
+
+// Dentro da função mostrarEventoEspecial():
+// ... (código do LCD) ...
+  uint32_t corEvento = strip.Color(255,165,0); // Laranja para evento
+  if(textoEvento.startsWith("Reves")) corEvento = strip.Color(100,0,0); // Vermelho escuro para revés
+  else if (textoEvento.startsWith("Sorte")) corEvento = strip.Color(0,100,0); // Verde escuro para sorte
+  
+  for(int k=0; k<3; k++){ // Pisca um efeito geral
+      for(int l=0; l<LED_COUNT; l+=2) strip.setPixelColor(l, corEvento); // Acende LEDs alternados
+      strip.show(); delay(150);
+      strip.clear(); strip.show(); delay(150);
+  }
+  mostrarTodasPosicoesJogadoresLed(); // Restaura LEDs das posições dos jogadores
+//  esperarBotaoAvancar();
+// ...
+
+// Dentro da função perguntarCompra(int jogador, int casa):
+// (Após casa comprada)
+// ... (código do LCD) ...
+//            lcd.print(nome.substring(0,19));
+            // Efeito LED compra - acende os LEDs da casa comprada na cor do jogador
+            for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(casa*LEDS_PER_HOUSE + i, coresJogadores[jogador]);
+            strip.show();
+            delay(500); // Mostra a cor do jogador na casa comprada por um momento
+//            esperarBotaoAvancar();
+// ...
+
+// Dentro da função tentarConstruir(int jogador, int casa):
+// (Após construção OK)
+// ... (código do LCD) ...
+//              lcd.print("Mansao pronta!");
+            // Efeito LED Construção (pisca a cor do jogador nos LEDs da casa)
+            for(int k=0; k<3; k++){
+                for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(casa*LEDS_PER_HOUSE + i, coresJogadores[jogador]);
+                strip.show(); delay(150);
+                 for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(casa*LEDS_PER_HOUSE + i, strip.Color(0,0,0)); // Apaga
+                strip.show(); delay(150);
+            }
+            // Restaura a cor da casa para a do jogador (já que ele é o dono)
+            for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(casa*LEDS_PER_HOUSE + i, coresJogadores[jogador]);
+            strip.show();
+//            esperarBotaoAvancar();
+// ...
+
+// Dentro da função eventoDaCasa(int jogador, int posJogador):
+// (Para Feriado - case 12)
+// ... (lógica do feriado) ...
+//        acaoDaCasaRealizadaOuTransferida = true;
+        // Efeito de LED para Feriado (ex: pisca dourado nos LEDs da casa)
+        for(int k=0; k<3; k++){
+            for(int l=0; l<LEDS_PER_HOUSE; l++) strip.setPixelColor(posJogador*LEDS_PER_HOUSE + l, strip.Color(255,223,0)); // Dourado
+            strip.show(); delay(150);
+            for(int l=0; l<LEDS_PER_HOUSE; l++) strip.setPixelColor(posJogador*LEDS_PER_HOUSE + l, strip.Color(0,0,0)); // Apaga
+            strip.show(); delay(150); 
+        }
+        // A chamada para mostrarTodasPosicoesJogadoresLed() no loop principal restaurará as cores corretas.
+//        break; // O break já existe no código completo
+// ...
+// (Para pagamento de aluguel)
+// ... (lógica de pagamento de aluguel) ...
+//      lcd.setCursor(0,2); lcd.print(textoEventoLinha3);
+
+      // Efeito LED para pagamento de aluguel (pisca vermelho nos LEDs da casa do jogador que pagou)
+      uint32_t corPagamento = strip.Color(255,0,0); 
+      for(int k=0; k<2; k++){
+          for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(posJogador*LEDS_PER_HOUSE + i, corPagamento);
+          strip.show(); delay(200);
+           for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(posJogador*LEDS_PER_HOUSE + i, strip.Color(0,0,0)); // Apaga
+          strip.show(); delay(200);
+      }
+      // A chamada para mostrarTodasPosicoesJogadoresLed() no loop principal restaurará.
+// ... (resto da lógica de pagamento) ...
+
+// Dentro da função loop():
+
+// No início do jogo, após configurar jogadores:
+// ... (código de início de jogo) ...
+//    lcd.print(String(numJogadores) + " Jogadores - J1 comeca");
+    mostrarTodasPosicoesJogadoresLed(); // Atualiza LEDs no início do jogo
+//    esperarBotaoAvancar();
+// ...
+
+// Quando um jogador está preso:
+// ... (código de jogador preso) ...
+//    lcd.print(saldoJogador[jogadorAtual]);
+    mostrarTodasPosicoesJogadoresLed(); // Mostra jogador na Jaula
+//    esperarBotaoAvancar();
+// ...
+
+// Antes de jogar o dado:
+// ... (código antes de jogar dado) ...
+//  lcd.print("jogar o dado...");
+  mostrarTodasPosicoesJogadoresLed(); // Mostra posições antes de jogar o dado
+//  esperarBotaoAvancar();
+// ...
+
+// Após passar pelo início:
+// ... (código de passar pelo início) ...
+//    lcd.print("Recebeu +R$200");
+    // Efeito de LED para passar pelo início
+    uint32_t corInicio = strip.Color(200,200,200); // Branco brilhante
+    for(int k=0; k<2; k++){ // Pisca mais rápido
+        for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(0*LEDS_PER_HOUSE + i, corInicio); // LEDs da casa Início
+        strip.show(); delay(100);
+        for(int i=0; i<LEDS_PER_HOUSE; i++) strip.setPixelColor(0*LEDS_PER_HOUSE + i, strip.Color(0,0,0)); // Apaga
+        strip.show(); delay(100);
+    }
+    // A chamada para mostrarTodasPosicoesJogadoresLed() no final do turno restaurará o estado correto.
+//    esperarBotaoAvancar();
+// ...
+
+// Após eventoDaCasa e antes de verificarStatusJogador:
+// ...
+//  eventoDaCasa(jogadorAtual, posicaoJogador[jogadorAtual]); 
+  
+  mostrarTodasPosicoesJogadoresLed(); // Garante que o LED reflita a posição final após o evento da casa
+//  verificarStatusJogador(jogadorAtual); 
+// ...
+
