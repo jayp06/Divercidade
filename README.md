@@ -1,4 +1,5 @@
-🎲 Divercidade: Sobre o Jogo e Bibliotecas
+#🎲 Divercidade: Sobre o Jogo e Bibliotecas
+---
 ✅ Resumo do Jogo
 🎯 Objetivo
 Acumular uma riqueza de R$3000
