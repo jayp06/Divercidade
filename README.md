@@ -162,13 +162,8 @@ Este projeto está licenciado sob a **MIT License**.
 ---
 
 ## 📸 Imagens e Vídeos
-> _(Adicione aqui fotos ou vídeos do seu protótipo funcionando!)_
+> _()_
 
 ---
 
-## 🤝 Contribuições
-Contribuições são bem-vindas!  
-Por favor, abra uma **issue** ou envie um **pull request**.
-
----
 
