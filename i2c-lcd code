@@ -27,9 +27,8 @@ int numeroCasasConstruidas[numCasas];
 int donoCasa[numCasas];
 
 const int BOTAO_AVANCAR_NAO_COMPRAR = 7;
-const int BOTAO_COMPRAR_SIM = 9;         // MODIFICADO: Pino 9 para Comprar/Sim e Confirmar Jogadores
+const int BOTAO_COMPRAR_SIM = 9;         // Pino 9 para Comprar/Sim e Confirmar Jogadores
 const int BOTAO_SELECIONA_JOGADOR = 12;   // Pino 12 para Selecionar Jogadores
-// A constante BOTAO_CONFIRMA_JOGADOR foi removida, BOTAO_COMPRAR_SIM (Pino 9) cobre sua função.
 
 uint32_t coresJogadores[4];
 
@@ -45,9 +44,10 @@ bool verificarVencedor();
 void esperarBotaoAvancar();
 void mostrarTodasPosicoesJogadoresLed();
 
+// PREÇOS DAS CASAS MODIFICADOS CONFORME SOLICITADO
 int precoCasa[numCasas] = {
-  0, 100, 120, 140, 0, 150, 0, 160, 180, 200, 220, 240,
-  0, 260, 280, 300, 320, 0, 0, 340, 360, 380, 400, 420
+  0,  80,  80, 120,   0, 100,   0, 100, 140, 160, 200, 220, // Índices 0-11
+  0, 260, 500, 300, 320,   0,   0, 360, 380, 400, 400, 450  // Índices 12-23
 };
 
 String textoEvento = "";
@@ -122,7 +122,7 @@ void configurarJogadores() {
   lcd.setCursor(0, 0);
   lcd.print("Num. Jogadores:");
   lcd.setCursor(0, 2);
-  lcd.print("BRANCO:Muda RED:OK  "); // P9 agora é para OK
+  lcd.print("P12:Muda / P9:OK  ");
 
   while (!confirmado) {
     lcd.setCursor(8, 1);
@@ -182,7 +182,7 @@ void configurarJogadores() {
   lcd.setCursor(0, 2);
   lcd.print("Confirmado!");
   lcd.setCursor(0, 3);
-  lcd.print("Avancar(AMARELO)    ");
+  lcd.print("Avancar (P7)    ");
 
   esperarBotaoAvancar();
 }
@@ -413,9 +413,9 @@ bool perguntarCompra(int jogador, int casa) {
   lcd.print("Preco: R$");
   lcd.print(precoCasa[casa]);
   lcd.setCursor(0, 3);
-  lcd.print("S(RED) N(AMARELO)   "); // MODIFICADO TEXTO (P8 -> P9)
+  lcd.print("Sim(P9) Nao(P7)   ");
   Serial.println("Jogador " + String(jogador + 1) + " em " + nomeCasa(casa) + ", preco R$" + String(precoCasa[casa]) + ".");
-  Serial.println("Comprar? (Botao Pino9=SIM, Botao Pino7=NAO)"); // MODIFICADO TEXTO (P8 -> P9)
+  Serial.println("Comprar? (Botao Pino9=SIM, Botao Pino7=NAO)");
   unsigned long startDebounceSim = 0;
   bool buttonStateSim = HIGH;
   bool lastButtonStateSim = HIGH;
@@ -425,7 +425,7 @@ bool perguntarCompra(int jogador, int casa) {
 
   while (true) {
     lastButtonStateSim = buttonStateSim;
-    buttonStateSim = digitalRead(BOTAO_COMPRAR_SIM); // BOTAO_COMPRAR_SIM é Pino 9
+    buttonStateSim = digitalRead(BOTAO_COMPRAR_SIM); 
     if (lastButtonStateSim == HIGH && buttonStateSim == LOW) startDebounceSim = millis();
     if (lastButtonStateSim == LOW && buttonStateSim == HIGH && (millis() - startDebounceSim) > 50) {
         if (saldoJogador[jogador] >= precoCasa[casa]) {
@@ -490,9 +490,9 @@ void tentarConstruir(int jogador, int casa) {
     lcd.print("Mansao ");
   lcd.print("40R$?");
   lcd.setCursor(0, 3);
-  lcd.print("S(RED) N(AMARELO)   "); // MODIFICADO TEXTO (P8 -> P9)
+  lcd.print("Sim(P9) Nao(P7)   ");
   Serial.println("Jogador " + String(jogador + 1) + " pode construir em " + nomeCasa(casa) + ".");
-  Serial.println("Preco: 40 R$. (Botao Pino9=SIM, Botao Pino7=NAO)"); // MODIFICADO TEXTO (P8 -> P9)
+  Serial.println("Preco: 40 R$. (Botao Pino9=SIM, Botao Pino7=NAO)");
   unsigned long tempoInicial = millis();
   bool respostaDada = false;
   unsigned long startDebounceSim = 0;
@@ -504,7 +504,7 @@ void tentarConstruir(int jogador, int casa) {
 
   while (((millis() - tempoInicial) < 15000) && !respostaDada) {
     lastButtonStateSim = buttonStateSim;
-    buttonStateSim = digitalRead(BOTAO_COMPRAR_SIM); // BOTAO_COMPRAR_SIM é Pino 9
+    buttonStateSim = digitalRead(BOTAO_COMPRAR_SIM); 
     if (lastButtonStateSim == HIGH && buttonStateSim == LOW) startDebounceSim = millis();
     if (lastButtonStateSim == LOW && buttonStateSim == HIGH && (millis() - startDebounceSim) > 50) {
         respostaDada = true;
@@ -684,10 +684,9 @@ void setup() {
   randomSeed(analogRead(A0));
 
   pinMode(BOTAO_AVANCAR_NAO_COMPRAR, INPUT_PULLUP); // Pino 7
-  pinMode(BOTAO_COMPRAR_SIM, INPUT_PULLUP);         // Pino 9 (era 8)
-  pinMode(BOTAO_SELECIONA_JOGADOR, INPUT_PULLUP);   // Pino 12 (reativado para configurar jogadores)
-  // pinMode para BOTAO_CONFIRMA_JOGADOR não é mais necessário separadamente, pois BOTAO_COMPRAR_SIM (Pino 9) cobre isso.
-
+  pinMode(BOTAO_COMPRAR_SIM, INPUT_PULLUP);         // Pino 9
+  pinMode(BOTAO_SELECIONA_JOGADOR, INPUT_PULLUP);   // Pino 12
+  
   strip.begin();
   strip.setBrightness(50);
   strip.clear();
@@ -702,21 +701,21 @@ void setup() {
   }
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("DIVERCIDADE");
+  lcd.print("Super Banco LCD");
   lcd.setCursor(0,1);
-  lcd.print("Avancar(AMARELO");
+  lcd.print("Aperte Avancar(P7)");
   esperarBotaoAvancar();
   lcd.clear();
   Serial.println("Jogo Iniciado!");
   Serial.println("Botao Pino7: Avancar/Nao.");
-  Serial.println("Botao Pino9: Sim/Comprar/Confirmar Jogadores."); // MODIFICADO TEXTO
+  Serial.println("Botao Pino9: Sim/Comprar/Confirmar Jogadores."); 
   Serial.println("Botao Pino12: Selecionar Jogadores.");
 }
 
 void loop() {
-  if (numJogadores == 0) { // Agora o número de jogadores será selecionado
+  if (numJogadores == 0) { 
     configurarJogadores();
-    if(numJogadores == 0) { // Salvaguarda caso a configuração não defina jogadores
+    if(numJogadores == 0) { 
         lcd.clear();
         lcd.print("Erro: Jogadores?");
         delay(2000);
@@ -730,7 +729,7 @@ void loop() {
     lcd.clear();
     lcd.print("Novo Jogo!");
     lcd.setCursor(0,1);
-    lcd.print(String(numJogadores) + " Jogadores - J1 "); // Mostra o número de jogadores selecionado
+    lcd.print(String(numJogadores) + " Jogadores - J1 "); 
     mostrarTodasPosicoesJogadoresLed();
     esperarBotaoAvancar();
   }
@@ -778,7 +777,7 @@ void loop() {
   lcd.print("Saldo: R$");
   lcd.print(saldoJogador[jogadorAtual]);
   lcd.setCursor(0,2);
-  lcd.print("AMARELO avança ");
+  lcd.print("Pressione P7 para"); // MODIFICADO: Referência direta ao pino
   lcd.setCursor(0,3);
   lcd.print("jogar o dado...");
   mostrarTodasPosicoesJogadoresLed();
@@ -835,5 +834,5 @@ void loop() {
   lcd.setCursor(0, 3);
   lcd.print(s3.substring(0,9) + s4.substring(0,10));
   esperarBotaoAvancar();
-  jogadorAtual = (jogadorAtual + 1) % numJogadores; // CORRIGIDO: jogadoro bAtual -> jogadorAtual
+  jogadorAtual = (jogadorAtual + 1) % numJogadores; 
 }
